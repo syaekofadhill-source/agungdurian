@@ -2,9 +2,10 @@ import "server-only";
 
 import { cache } from "react";
 
-import { MOCK_PRODUCTS, MOCK_SETTINGS, MOCK_TESTIMONIALS } from "@/lib/mock-data";
+import { MOCK_ORDERS, MOCK_PRODUCTS, MOCK_SETTINGS, MOCK_TESTIMONIALS, toPublicOrder } from "@/lib/mock-data";
+import { hydrateStoreSettings } from "@/lib/settings-helper";
 import { createSupabasePublicClient } from "@/lib/supabase/server";
-import type { Product, StoreSettings, Testimonial } from "@/types/database";
+import type { Product, PublicOrder, StoreSettings, Testimonial } from "@/types/database";
 
 /**
  * Public storefront reads. Each function degrades to typed seed data when
@@ -13,7 +14,6 @@ import type { Product, StoreSettings, Testimonial } from "@/types/database";
  */
 
 function normalizeProduct(p: Product): Product {
-  // PostgREST returns numeric columns as strings in some setups — coerce defensively.
   return { ...p, avg_weight_kg: Number(p.avg_weight_kg) };
 }
 
@@ -32,13 +32,7 @@ export const getStoreSettings = cache(async (): Promise<StoreSettings> => {
     console.warn("[store] gagal memuat store_settings:", summarizeSupabaseError(error.message));
     return MOCK_SETTINGS;
   }
-  if (!data) return MOCK_SETTINGS;
-  return {
-    ...MOCK_SETTINGS,
-    ...data,
-    google_rating: Number(data.google_rating),
-    marquee_items: data.marquee_items?.length ? data.marquee_items : MOCK_SETTINGS.marquee_items,
-  };
+  return hydrateStoreSettings(data);
 });
 
 export const getActiveProducts = cache(async (): Promise<Product[]> => {
@@ -77,3 +71,18 @@ export const getVisibleTestimonials = cache(async (): Promise<Testimonial[]> => 
   }
   return data ?? [];
 });
+
+export async function getPublicOrderByCode(orderCode: string): Promise<PublicOrder | null> {
+  const code = orderCode.trim().toUpperCase();
+  const supabase = createSupabasePublicClient();
+  if (!supabase) {
+    const found = MOCK_ORDERS.find((o) => o.order_code.toUpperCase() === code);
+    return found ? toPublicOrder(found) : null;
+  }
+  const { data, error } = await supabase.rpc("get_public_order", { p_order_code: code });
+  if (error) {
+    console.warn("[store] gagal memuat invoice:", summarizeSupabaseError(error.message));
+    return null;
+  }
+  return data ?? null;
+}

@@ -32,6 +32,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const title = `${s.store_name} — Durian Matang Pohon Sigaluh, Banjarnegara`;
   const description =
     "Durian Pak Agung: durian matang pohon langsung dari kebun Karangmangu, Sigaluh, Banjarnegara. Beli per butir utuh atau per gram daging kupas — garansi manis, timbangan jujur, kirim vacuum ke luar kota.";
+  const ogImage = s.og_image_url || "/images/og-image.jpg";
   return {
     metadataBase: new URL(getSiteUrl()),
     title: { default: title, template: `%s · ${s.store_name}` },
@@ -54,9 +55,9 @@ export async function generateMetadata(): Promise<Metadata> {
       siteName: s.store_name,
       title,
       description,
-      images: [{ url: "/images/og-image.jpg", width: 1200, height: 630, alt: "Durian matang pohon AgungDurian" }],
+      images: [{ url: ogImage, width: 1200, height: 630, alt: `Durian matang pohon ${s.store_name}` }],
     },
-    twitter: { card: "summary_large_image", title, description, images: ["/images/og-image.jpg"] },
+    twitter: { card: "summary_large_image", title, description, images: [ogImage] },
     robots: { index: true, follow: true },
     formatDetection: { telephone: false },
   };

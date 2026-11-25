@@ -11,7 +11,7 @@ export const phoneSchema = z
     error: "Format nomor HP tidak valid (contoh: 0813xxxxxxx)",
   });
 
-const uuid = z.string().regex(/^[0-9a-f-]{36}$/i, { error: "ID produk tidak valid" });
+const uuid = z.string().regex(/^[0-9a-f-]{36}$/i, { error: "ID tidak valid" });
 
 export const cartItemSchema = z.discriminatedUnion("mode", [
   z.object({
@@ -43,6 +43,9 @@ export const checkoutSchema = z
     deliveryMethod: z.enum(["pickup", "local_delivery", "shipping_vacuum"], {
       error: "Pilih metode pengambilan",
     }),
+    paymentMethod: z.enum(["dana", "cod", "ambil_di_tempat"], {
+      error: "Pilih metode pembayaran",
+    }),
     deliveryAddress: z.string().trim().max(400, { error: "Alamat terlalu panjang" }).optional().default(""),
     notes: z.string().trim().max(400, { error: "Catatan terlalu panjang" }).optional().default(""),
     items: z.array(cartItemSchema).min(1, { error: "Keranjang masih kosong" }).max(30),
@@ -55,12 +58,43 @@ export const checkoutSchema = z
         message: "Alamat lengkap wajib diisi untuk pengantaran (min. 10 karakter)",
       });
     }
+    if (val.paymentMethod === "ambil_di_tempat" && val.deliveryMethod !== "pickup") {
+      ctx.addIssue({
+        code: "custom",
+        path: ["paymentMethod"],
+        message: "Bayar di kebun hanya tersedia untuk metode Ambil di Kebun Sigaluh.",
+      });
+    }
+    if (val.paymentMethod === "cod" && val.deliveryMethod === "pickup") {
+      ctx.addIssue({
+        code: "custom",
+        path: ["paymentMethod"],
+        message: "COD hanya berlaku untuk pengantaran kurir.",
+      });
+    }
   });
 
 export type CheckoutInput = z.input<typeof checkoutSchema>;
 
-export const orderStatusSchema = z.object({
-  orderId: uuid,
-  status: z.enum(["pending", "confirmed", "completed", "cancelled"]),
-  deductStock: z.boolean().default(true),
-});
+export const orderActionSchema = z
+  .object({
+    orderId: uuid,
+    action: z.enum(["approve", "reject", "preparing", "ready_or_shipping", "completed", "cancelled"]),
+    adminNote: z.string().trim().max(400, { error: "Catatan maksimal 400 karakter" }).optional().default(""),
+    verifyPayment: z.boolean().default(true),
+  })
+  .superRefine((val, ctx) => {
+    if (val.action === "reject" && val.adminNote.length < 3) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["adminNote"],
+        message: "Alasan penolakan wajib diisi (minimal 3 karakter).",
+      });
+    }
+  });
+
+export const trackOrderQuerySchema = z
+  .string({ error: "Masukkan kode pesanan atau nomor HP" })
+  .trim()
+  .min(6, { error: "Masukkan minimal 6 karakter (contoh: AGD-20261125-XXXX atau 0813xxxxxxx)" })
+  .max(40);

@@ -5,6 +5,7 @@ import { Menu, MessageCircle, ShoppingBag } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { ProductImage } from "@/components/store/product-image";
 import { Dialog, DialogClose, DialogDescription, DialogTitle, SheetContent } from "@/components/ui/dialog";
 import { cn, prettyPhone } from "@/lib/utils";
 import { buildWhatsAppUrl } from "@/lib/whatsapp";
@@ -17,6 +18,7 @@ const NAV_LINKS = [
   { href: "/#rekomendasi", label: "Cari Rasa" },
   { href: "/#testimoni", label: "Testimoni" },
   { href: "/#lokasi", label: "Lokasi" },
+  { href: "/lacak", label: "Lacak Pesanan" },
 ] as const;
 
 export function StoreHeader({ settings }: { settings: StoreSettings }) {
@@ -38,14 +40,18 @@ export function StoreHeader({ settings }: { settings: StoreSettings }) {
     <header className="sticky top-0 z-40 border-b border-orchard/10 bg-cream/85 backdrop-blur-md">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-4 sm:h-18 sm:px-6">
         <Link href="/" className="group flex items-center gap-2.5 outline-none">
-          <span className="grid size-10 place-items-center rounded-2xl bg-orchard text-gold shadow-soft transition-transform duration-300 group-hover:scale-105">
-            <svg viewBox="0 0 36 36" className="size-6" aria-hidden>
-              <path
-                d="M18 4c1.2 2.4 3.4 3 5.2 2.4-.5 2.4.7 4.2 3 5.3-1.7 1.2-2.2 3.4-1.2 5.2 2.4 0 4.2 1.8 4.2 3.6-2.4 0-3.6 1.8-3.6 4.2 0 5-3.4 9-7.6 9s-7.6-4-7.6-9c0-2.4-1.2-4.2-3.6-4.2 0-1.8 1.8-3.6 4.2-3.6 1-1.8.5-4-1.2-5.2 2.3-1.1 3.5-2.9 3-5.3 1.8.6 4 0 5.2-2.4z"
-                fill="currentColor"
-              />
-              <path d="M18 13v16M18 13c-3.5 3.6-4.5 8-3.4 13.5M18 13c3.5 3.6 4.5 8 3.4 13.5" stroke="#0D2419" strokeWidth="1.3" strokeLinecap="round" fill="none" />
-            </svg>
+          <span className="relative grid size-10 place-items-center overflow-hidden rounded-2xl bg-orchard text-gold shadow-soft transition-transform duration-300 group-hover:scale-105">
+            {settings.logo_image_url ? (
+              <ProductImage src={settings.logo_image_url} alt={settings.store_name} fill sizes="40px" />
+            ) : (
+              <svg viewBox="0 0 36 36" className="size-6" aria-hidden>
+                <path
+                  d="M18 4c1.2 2.4 3.4 3 5.2 2.4-.5 2.4.7 4.2 3 5.3-1.7 1.2-2.2 3.4-1.2 5.2 2.4 0 4.2 1.8 4.2 3.6-2.4 0-3.6 1.8-3.6 4.2 0 5-3.4 9-7.6 9s-7.6-4-7.6-9c0-2.4-1.2-4.2-3.6-4.2 0-1.8 1.8-3.6 4.2-3.6 1-1.8.5-4-1.2-5.2 2.3-1.1 3.5-2.9 3-5.3 1.8.6 4 0 5.2-2.4z"
+                  fill="currentColor"
+                />
+                <path d="M18 13v16M18 13c-3.5 3.6-4.5 8-3.4 13.5M18 13c3.5 3.6 4.5 8 3.4 13.5" stroke="#0D2419" strokeWidth="1.3" strokeLinecap="round" fill="none" />
+              </svg>
+            )}
           </span>
           <span className="leading-tight">
             <span className="block font-display text-lg font-bold tracking-tight text-orchard sm:text-xl">

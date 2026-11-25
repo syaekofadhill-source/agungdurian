@@ -26,7 +26,7 @@ export default async function HomePage() {
     alternateName: "Durian Pak Agung",
     description: settings.hero_subheadline || settings.tagline,
     url: siteUrl,
-    image: `${siteUrl}/images/og-image.jpg`,
+    image: settings.og_image_url.startsWith("/") ? `${siteUrl}${settings.og_image_url}` : settings.og_image_url,
     telephone: `+${settings.whatsapp_number}`,
     priceRange: "Rp85.000 - Rp750.000",
     address: {
@@ -79,7 +79,7 @@ export default async function HomePage() {
       </div>
 
       <CatalogSection products={products} />
-      <WhyAgungSection />
+      <WhyAgungSection settings={settings} />
       <DurianRecommender products={products} />
       <TestimonialsLocation settings={settings} testimonials={testimonials} />
     </>

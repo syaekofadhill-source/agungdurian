@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 
 import { LOW_STOCK_BUTIR, LOW_STOCK_GRAM } from "@/lib/constants";
 import { MOCK_ORDERS, MOCK_PRODUCTS, MOCK_SETTINGS, MOCK_TESTIMONIALS } from "@/lib/mock-data";
+import { hydrateStoreSettings, normalizeOrderRecord } from "@/lib/settings-helper";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { Order, Product, StoreSettings, Testimonial } from "@/types/database";
@@ -66,7 +67,20 @@ export async function getAdminOrders(): Promise<Order[]> {
     console.error("[admin] gagal memuat pesanan:", error.message);
     return [];
   }
-  return data ?? [];
+  return (data ?? []).map(normalizeOrderRecord);
+}
+
+export async function getPendingApprovalCount(): Promise<number> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return MOCK_ORDERS.filter((o) => o.status === "pending_approval").length;
+
+  const { count, error } = await supabase
+    .from("orders")
+    .select("*", { count: "exact", head: true })
+    .or("status.eq.pending_approval,status.eq.pending");
+
+  if (error) return 0;
+  return count ?? 0;
 }
 
 export async function getAdminSettings(): Promise<StoreSettings> {
@@ -76,12 +90,7 @@ export async function getAdminSettings(): Promise<StoreSettings> {
   const { data, error } = await supabase.from("store_settings").select("*").eq("id", 1).maybeSingle();
   if (error || !data) return MOCK_SETTINGS;
 
-  return {
-    ...MOCK_SETTINGS,
-    ...data,
-    google_rating: Number(data.google_rating),
-    marquee_items: data.marquee_items?.length ? data.marquee_items : MOCK_SETTINGS.marquee_items,
-  };
+  return hydrateStoreSettings(data);
 }
 
 export async function getAdminTestimonials(): Promise<Testimonial[]> {
@@ -113,10 +122,25 @@ export async function getAdminOverviewData() {
 
   const activeProductsCount = products.filter((p) => p.is_active).length;
   const ordersTodayCount = orders.filter((o) => jakartaDateFormatter.format(new Date(o.created_at)) === todayWib).length;
-  const pendingOrdersCount = orders.filter((o) => o.status === "pending").length;
-  const estimatedRevenue = orders
-    .filter((o) => o.status !== "cancelled")
-    .reduce((sum, o) => sum + o.total_amount, 0);
+  const pendingApprovalOrders = orders.filter((o) => o.status === "pending_approval");
+  const approvedOrders = orders.filter((o) => o.approval_status === "approved" && o.status !== "cancelled");
+  const verifiedRevenue = approvedOrders.reduce((sum, o) => sum + o.total_amount, 0);
+
+  const paymentBreakdown = {
+    dana: orders.filter((o) => o.payment_method === "dana").length,
+    cod: orders.filter((o) => o.payment_method === "cod").length,
+    ambil_di_tempat: orders.filter((o) => o.payment_method === "ambil_di_tempat").length,
+  };
+
+  let butirUnits = 0;
+  let gramUnits = 0;
+  for (const order of orders) {
+    if (order.status === "cancelled" || order.status === "rejected") continue;
+    for (const item of order.items_json) {
+      if (item.mode === "butir") butirUnits += item.quantity;
+      else gramUnits += item.quantity;
+    }
+  }
 
   const lowStockProducts = products.filter(
     (p) => (p.allow_butir && p.stock_butir <= LOW_STOCK_BUTIR) || (p.allow_gram && p.stock_gram <= LOW_STOCK_GRAM),
@@ -127,9 +151,13 @@ export async function getAdminOverviewData() {
     totalProductsCount: products.length,
     ordersTodayCount,
     totalOrdersCount: orders.length,
-    pendingOrdersCount,
-    estimatedRevenue,
+    pendingApprovalCount: pendingApprovalOrders.length,
+    approvedOrdersCount: approvedOrders.length,
+    verifiedRevenue,
+    paymentBreakdown,
+    modeBreakdown: { butirUnits, gramUnits },
     lowStockProducts,
+    pendingOrders: pendingApprovalOrders.slice(0, 5),
     recentOrders: orders.slice(0, 6),
   };
 }

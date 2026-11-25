@@ -2,10 +2,12 @@ import {
   BUTIR_PREPARATION_LABEL,
   DELIVERY_METHOD_META,
   GRAM_PACKAGING_META,
+  ORDER_STATUS_META,
+  PAYMENT_METHOD_META,
 } from "@/lib/constants";
 import { getButirSize } from "@/lib/pricing";
-import { formatGram, formatRupiah, sanitizePhone } from "@/lib/utils";
-import type { DeliveryMethod, OrderItem } from "@/types/database";
+import { formatGram, formatRupiah, getSiteUrl, sanitizePhone } from "@/lib/utils";
+import type { DeliveryMethod, OrderItem, OrderStatus, PaymentMethod } from "@/types/database";
 
 export function buildWhatsAppUrl(phone: string, message?: string): string {
   const base = `https://wa.me/${sanitizePhone(phone)}`;
@@ -30,20 +32,27 @@ export function buildOrderMessage(params: {
   storeName: string;
   orderCode: string;
   customerName: string;
-  customerPhone: string;
+  customerPhone?: string | null;
   deliveryMethod: DeliveryMethod;
+  paymentMethod: PaymentMethod;
   deliveryAddress?: string | null;
   notes?: string | null;
   items: OrderItem[];
   total: number;
+  hasProof?: boolean;
 }): string {
   const lines: string[] = [];
-  lines.push(`Halo ${params.storeName}, saya ingin memesan durian 🙏`);
+  const invoiceUrl = `${getSiteUrl()}/order/${params.orderCode}`;
+  lines.push(`Halo ${params.storeName}, saya sudah membuat pesanan durian 🙏`);
   lines.push("");
   lines.push(`🧾 *Kode Pesanan:* ${params.orderCode}`);
   lines.push(`👤 Nama: ${params.customerName}`);
-  lines.push(`📱 No. HP: +${params.customerPhone}`);
-  lines.push(`🚚 Metode: ${DELIVERY_METHOD_META[params.deliveryMethod].label}`);
+  if (params.customerPhone) lines.push(`📱 No. HP: +${params.customerPhone}`);
+  lines.push(`🚚 Pengambilan: ${DELIVERY_METHOD_META[params.deliveryMethod].label}`);
+  lines.push(`💳 Pembayaran: ${PAYMENT_METHOD_META[params.paymentMethod].label}`);
+  if (params.paymentMethod === "dana") {
+    lines.push(params.hasProof ? `✅ Bukti transfer DANA sudah diunggah di invoice.` : `⏳ Pembayaran DANA menyusul di halaman invoice.`);
+  }
   if (params.deliveryAddress) lines.push(`📍 Alamat: ${params.deliveryAddress}`);
   lines.push("");
   lines.push("*RINCIAN PESANAN*");
@@ -61,6 +70,28 @@ export function buildOrderMessage(params: {
     lines.push(`📝 Catatan: ${params.notes}`);
   }
   lines.push("");
-  lines.push("Mohon konfirmasi ketersediaan & total pembayarannya ya. Terima kasih!");
+  lines.push(`🔗 Cek Invoice & Status: ${invoiceUrl}`);
+  lines.push("Mohon persetujuan & konfirmasinya ya. Terima kasih!");
+  return lines.join("\n");
+}
+
+export function buildCustomerStatusMessage(params: {
+  storeName: string;
+  orderCode: string;
+  customerName: string;
+  status: OrderStatus;
+  adminNote?: string | null;
+}): string {
+  const invoiceUrl = `${getSiteUrl()}/order/${params.orderCode}`;
+  const statusLabel = ORDER_STATUS_META[params.status].label;
+  const lines = [
+    `Halo Kak ${params.customerName}, ini update pesanan *${params.orderCode}* dari *${params.storeName}* 🍈`,
+    "",
+    `📌 *Status Terbaru:* ${statusLabel}`,
+  ];
+  if (params.adminNote) lines.push(`📝 Catatan Admin: ${params.adminNote}`);
+  lines.push(`🔗 Detail Pesanan: ${invoiceUrl}`);
+  lines.push("");
+  lines.push("Terima kasih sudah memesan di kebun kami!");
   return lines.join("\n");
 }

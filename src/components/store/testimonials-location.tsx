@@ -2,6 +2,7 @@ import { ArrowUpRight, Clock, MapPin, MessageCircle, Quote } from "lucide-react"
 
 import { Reveal } from "@/components/motion/reveal";
 import { ContourLines, InstagramIcon, LeafSprig, StarRow } from "@/components/store/ornaments";
+import { ProductImage } from "@/components/store/product-image";
 import { buttonVariants } from "@/components/ui/button";
 import { cn, prettyPhone } from "@/lib/utils";
 import { buildWhatsAppUrl } from "@/lib/whatsapp";
@@ -145,8 +146,22 @@ export function TestimonialsLocation({
               </div>
 
               <div className="relative flex min-h-72 flex-col justify-between overflow-hidden bg-orchard-2 p-7 sm:p-10 lg:col-span-5">
-                <ContourLines className="pointer-events-none absolute -right-24 -top-24 size-[520px] text-cream/15" />
-                <LeafSprig className="pointer-events-none -bottom-10 -left-8 absolute size-52 text-cream opacity-10" />
+                {settings.location_image_url ? (
+                  <>
+                    <ProductImage
+                      src={settings.location_image_url}
+                      alt={`Lokasi kebun & gerai ${settings.store_name}`}
+                      fill
+                      sizes="(max-width: 1024px) 95vw, 40vw"
+                    />
+                    <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-orchard via-orchard/45 to-orchard/35" />
+                  </>
+                ) : (
+                  <>
+                    <ContourLines className="pointer-events-none absolute -right-24 -top-24 size-[520px] text-cream/15" />
+                    <LeafSprig className="pointer-events-none -bottom-10 -left-8 absolute size-52 text-cream opacity-10" />
+                  </>
+                )}
 
                 <div className="relative flex items-center justify-between">
                   <span className="rounded-full bg-cream/10 px-3 py-1 font-mono text-[11px] text-custard backdrop-blur">

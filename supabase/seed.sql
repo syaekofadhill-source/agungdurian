@@ -9,7 +9,11 @@
 insert into public.store_settings (
   id, store_name, tagline, whatsapp_number, instagram_handle, address, maps_url,
   opening_hours, harvest_status, harvest_banner_text, marquee_items,
-  hero_headline, hero_subheadline, google_rating, google_review_count
+  hero_headline, hero_subheadline, google_rating, google_review_count,
+  hero_image_url, og_image_url, hero_badge_text, cta_primary_text, footer_description,
+  why_items_json,
+  payment_dana_enabled, payment_dana_number, payment_dana_holder, payment_dana_instructions,
+  payment_cod_enabled, payment_cod_notes, payment_pickup_enabled, payment_pickup_notes
 ) values (
   1,
   'AgungDurian',
@@ -36,23 +40,56 @@ insert into public.store_settings (
   'Durian matang pohon, dipetik dengan sabar dari lereng Sigaluh.',
   'Setiap buah jatuh sendiri saat benar-benar matang — legit, wangi, dan bergaransi manis. Beli per butir utuh atau per gram daging kupas, langsung dari kebun Pak Agung.',
   4.7,
-  33
+  33,
+  '/images/hero.webp',
+  '/images/og-image.jpg',
+  'Kebun Sigaluh',
+  'Jelajahi Katalog Panen',
+  'Kebun durian keluarga di lereng Sigaluh. Hanya menjual buah jatuhan matang pohon dengan garansi ganti baru bila hambar atau mentah.',
+  '[
+    {"title":"Garansi ganti baru jika hambar atau mengkal.","description":"Makan langsung di kebun atau kirim ke rumah — bila ada buah yang kurang matang, berair, atau hambar, langsung kami tukar baru tanpa drama.","badge":"Komitmen Utama","icon":"shield"},
+    {"title":"Matang pohon, bukan peraman.","description":"Buah diikat tali pengaman di dahan lereng Sigaluh dan baru dipungut setelah jatuh alami. Rasa legit dan aromanya jauh lebih dalam.","badge":"Panen harian · ±480 mdpl","icon":"sprout"},
+    {"title":"Timbangan digital jujur.","description":"Baik beli per butir utuh maupun daging kupas per gram, semuanya ditimbang terbuka dengan timbangan digital terkalibrasi.","badge":"Presisi kelipatan 50g","icon":"scale"},
+    {"title":"Santap di saung, COD Banjarnegara, atau kirim Vacuum.","description":"Nikmati langsung di kebun Karangmangu, pesan antar area Banjarnegara & sekitar, atau kirim luar kota dengan kemasan Vacuum Pack + ice gel.","badge":"Ambil · COD · Vacuum","icon":"truck"}
+  ]'::jsonb,
+  true,
+  '081391094308',
+  'Durian Pak Agung',
+  'Transfer sesuai total pesanan ke nomor DANA di atas, lalu unggah screenshot/foto bukti transfer agar pesanan segera disetujui admin.',
+  true,
+  'Bayar tunai langsung saat kurir tiba (area Banjarnegara & sekitar).',
+  true,
+  'Ambil langsung di lapak Karangmangu, Sigaluh. Bisa pilih & cicipi di tempat.'
 )
 on conflict (id) do update set
-  store_name          = excluded.store_name,
-  tagline             = excluded.tagline,
-  whatsapp_number     = excluded.whatsapp_number,
-  instagram_handle    = excluded.instagram_handle,
-  address             = excluded.address,
-  maps_url            = excluded.maps_url,
-  opening_hours       = excluded.opening_hours,
-  harvest_status      = excluded.harvest_status,
-  harvest_banner_text = excluded.harvest_banner_text,
-  marquee_items       = excluded.marquee_items,
-  hero_headline       = excluded.hero_headline,
-  hero_subheadline    = excluded.hero_subheadline,
-  google_rating       = excluded.google_rating,
-  google_review_count = excluded.google_review_count;
+  store_name                = excluded.store_name,
+  tagline                   = excluded.tagline,
+  whatsapp_number           = excluded.whatsapp_number,
+  instagram_handle          = excluded.instagram_handle,
+  address                   = excluded.address,
+  maps_url                  = excluded.maps_url,
+  opening_hours             = excluded.opening_hours,
+  harvest_status            = excluded.harvest_status,
+  harvest_banner_text       = excluded.harvest_banner_text,
+  marquee_items             = excluded.marquee_items,
+  hero_headline             = excluded.hero_headline,
+  hero_subheadline          = excluded.hero_subheadline,
+  google_rating             = excluded.google_rating,
+  google_review_count       = excluded.google_review_count,
+  hero_image_url            = excluded.hero_image_url,
+  og_image_url              = excluded.og_image_url,
+  hero_badge_text           = excluded.hero_badge_text,
+  cta_primary_text          = excluded.cta_primary_text,
+  footer_description        = excluded.footer_description,
+  why_items_json            = excluded.why_items_json,
+  payment_dana_enabled      = excluded.payment_dana_enabled,
+  payment_dana_number       = excluded.payment_dana_number,
+  payment_dana_holder       = excluded.payment_dana_holder,
+  payment_dana_instructions = excluded.payment_dana_instructions,
+  payment_cod_enabled       = excluded.payment_cod_enabled,
+  payment_cod_notes         = excluded.payment_cod_notes,
+  payment_pickup_enabled    = excluded.payment_pickup_enabled,
+  payment_pickup_notes      = excluded.payment_pickup_notes;
 
 -- -----------------------------------------------------------------------------
 -- products

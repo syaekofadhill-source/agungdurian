@@ -1,77 +1,76 @@
-# Panduan Setup AgungDurian (E-Commerce & Admin CMS)
+# Panduan Setup AgungDurian V2 (E-Commerce & Modular Admin CMS)
 
 Panduan ini menjelaskan langkah demi langkah untuk menyiapkan proyek **AgungDurian** dengan backend **Supabase** (PostgreSQL, Auth, Storage) serta menjalankannya secara lokal maupun produksi.
 
-> **Catatan Mode Pratinjau:** Tanpa file `.env.local`, aplikasi tetap berjalan aman menggunakan data contoh (`src/lib/mock-data.ts`) agar tampilan toko dan pratinjau admin bisa langsung dicek tanpa error. Untuk mengaktifkan login admin, penyimpanan pesanan, upload gambar, dan CMS live, ikuti langkah di bawah ini.
+> **Catatan Mode Pratinjau:** Tanpa file `.env.local`, aplikasi tetap berjalan aman menggunakan data contoh (`src/lib/mock-data.ts`) agar tampilan toko, checkout, pelacakan, dan pratinjau admin bisa langsung dicek tanpa error.
 
 ---
 
-## 1. Buat Proyek Supabase & Jalankan Skema SQL
+## 1. Setup / Migrasi Database Supabase
 
-1. Masuk ke [Supabase Dashboard](https://supabase.com/dashboard) dan buat proyek baru (pilih region terdekat, misalnya **Singapore / ap-southeast-1**).
-2. Buka menu **SQL Editor** → **New query**.
-3. Salin seluruh isi file `supabase/schema.sql`, tempel ke editor, lalu klik **Run**.
-   - File ini bersifat *idempotent* (aman dijalankan ulang) dan akan membuat:
-     - Tipe enum (`harvest_status`, `order_status`, `variety_category`, `delivery_method`)
-     - Tabel `store_settings`, `products`, `orders`, `testimonials`
-     - Fungsi atomik pengelola stok (`apply_order_stock`, `transition_order_status`, `adjust_product_stock`)
-     - Kebijakan **Row Level Security (RLS)** untuk akses publik (`anon`) & admin (`authenticated`)
-     - Bucket Storage `product-images` (publik baca, hanya admin tulis)
-4. Setelah `schema.sql` sukses, buka query baru di **SQL Editor**, salin isi `supabase/seed.sql`, lalu klik **Run** untuk mengisi 6 varietas durian Sigaluh, 4 testimoni pembeli, dan pengaturan default toko.
+### A. Proyek Baru (Fresh Install)
+1. Masuk ke [Supabase Dashboard](https://supabase.com/dashboard) → **SQL Editor** → **New query**.
+2. Jalankan seluruh isi `supabase/schema.sql`.
+3. Buka query baru dan jalankan seluruh isi `supabase/seed.sql`.
+
+### B. Upgrade dari V1 ke V2 (Database Sudah Ada)
+1. Buka **SQL Editor** → **New query**.
+2. Salin seluruh isi **`supabase/migration_v2.sql`** dan klik **Run**.
+   - Migrasi ini bersifat *idempotent* (aman dijalankan ulang) dan akan:
+     - Menambah kolom media (`hero_image_url`, `logo_image_url`, `og_image_url`, `story_image_url`, `location_image_url`, `dana_qr_image_url`), konten (`why_items_json`, `hero_badge_text`, `cta_primary_text`, `footer_description`), dan pengaturan pembayaran (`DANA`, `COD`, `Ambil di Tempat`) pada `store_settings`.
+     - Meng-upgrade tabel `orders` dengan alur **Approval Admin**, status pembayaran (`payment_status`, `payment_proof_url`), dan riwayat status (`status_history_json`).
+     - Membuat RPC publik aman (`get_public_order`, `track_orders_by_query`, `attach_order_payment_proof`) serta RPC approval atomik (`process_order_action`).
+     - Membuat bucket Storage **`site-assets`** (maks 4 MB) dan **`payment-proofs`** (maks 3 MB) beserta policy RLS-nya.
 
 ---
 
 ## 2. Buat Akun Admin Pertama di Supabase Auth
 
-1. Di Supabase Dashboard, buka menu **Authentication** → **Users**.
-2. Klik **Add user** → **Create new user**.
-3. Masukkan email dan kata sandi admin (misalnya `admin@agungdurian.id`), lalu centang **Auto Confirm User** agar akun langsung aktif tanpa verifikasi email.
-4. *(Opsional keamanan tambahan)* Di **Authentication** → **Providers** / **Sign In**, nonaktifkan **Allow new users to sign up** jika pendaftaran publik tidak diperlukan, sehingga hanya admin yang Anda buat lewat dashboard yang bisa login.
+1. Di Supabase Dashboard, buka **Authentication** → **Users** → **Add user** → **Create new user**.
+2. Masukkan email dan kata sandi admin, lalu centang **Auto Confirm User**.
+3. *(Opsional)* Nonaktifkan public sign-ups di pengaturan Auth agar hanya admin terdaftar yang dapat login.
 
 ---
 
-## 3. Isi Variabel Lingkungan (`.env.local`)
+## 3. Isi `.env.local`
 
-1. Salin `.env.example` menjadi `.env.local` di root folder `d:\agungdurian`:
-   ```bash
-   cp .env.example .env.local
-   ```
-2. Di Supabase Dashboard, buka **Project Settings** → **API** dan salin:
-   - **Project URL** → `NEXT_PUBLIC_SUPABASE_URL`
-   - **anon / public key** → `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-3. Isi `.env.local`:
-   ```env
-   NEXT_PUBLIC_SUPABASE_URL=https://kodeproyekanda.supabase.co
-   NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOi...
-   NEXT_PUBLIC_SITE_URL=http://localhost:3000
-   ```
+Salin `.env.example` menjadi `.env.local` lalu isi dengan **Project API URL** (bukan URL halaman dashboard browser) dan **anon/publishable key** dari **Project Settings → API**:
+
+```env
+NEXT_PUBLIC_SUPABASE_URL=https://kodeproyekanda.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_...
+NEXT_PUBLIC_SITE_URL=http://localhost:3000
+```
 
 ---
 
-## 4. Menjalankan Secara Lokal
+## 4. Menjalankan Secara Lokal & Produksi
 
 ```bash
 npm install
 npm run dev
 ```
 
-- **Storefront Publik:** `http://localhost:3000`
-- **Halaman Login Admin:** `http://localhost:3000/admin/login`
-- **Dashboard Admin:** `http://localhost:3000/admin` (otomatis mengarahkan ke `/admin/login` bila belum login)
+Rute utama:
+- **Storefront:** `http://localhost:3000`
+- **Checkout:** `http://localhost:3000/checkout`
+- **Lacak Pesanan:** `http://localhost:3000/lacak`
+- **Invoice Pesanan:** `http://localhost:3000/order/[orderCode]`
+- **Admin CMS:** `http://localhost:3000/admin` (Login: `/admin/login`)
 
 ---
 
-## 5. Checklist Uji Coba Fitur Utama
+## 5. Checklist Uji Coba V2
 
-1. **Dual Selling Engine (`/`):** Buka salah satu produk seperti *Durian Bawor Kaki Tiga*, uji sakelar **Per Butir** vs **Per Gram** (slider gramasi kelipatan 50g + pilihan *Thinwall* / *Vacuum Pack*), lalu tambahkan ke keranjang.
-2. **Logged WhatsApp Checkout:** Buka Drawer Keranjang, isi nama, nomor HP (`08xxx` otomatis diubah ke `628xxx`), dan pilih metode pengiriman. Setelah dikirim, pesanan tercatat di tabel `orders` dengan kode `AGD-YYYYMMDD-XXXX` dan tombol **Buka WhatsApp Sekarang** menuju nomor WA yang diatur di CMS.
-3. **Smart Stock Deduction (`/admin/pesanan`):** Buka detail pesanan berstatus `pending`, aktifkan sakelar *Potong Stok Otomatis*, lalu klik **Konfirmasi Pesanan**. Stok `stock_butir` / `stock_gram` produk terkait langsung berkurang secara atomik di PostgreSQL (dan kembali otomatis bila dibatalkan).
-4. **Site CMS (`/admin/pengaturan`):** Ubah teks banner panen, nomor WhatsApp, atau kalimat marquee, lalu klik **Simpan & Tayangkan** — halaman depan langsung diperbarui melalui `revalidatePath`.
-5. **Upload Gambar (`/admin/produk`):** Tambah atau edit produk, unggah foto durian ke bucket `product-images`, dan verifikasi pratinjau langsung tampil.
+1. **Tampilan & Foto Web (`/admin/tampilan`):** Unggah atau ubah foto Hero, Logo, OG Image, Foto Kebun, Foto Lokasi, atau QR DANA — simpan dan refresh beranda untuk melihat perubahan langsung.
+2. **Konten & Copywriting (`/admin/konten`):** Edit teks banner panen, headline hero, ticker berjalan, 4 kartu keunggulan, dan deskripsi footer.
+3. **Pembayaran & Info Toko (`/admin/pengaturan`):** Aktif/nonaktifkan metode **DANA**, **COD**, dan **Ambil di Tempat**, lalu cek `/checkout`.
+4. **Checkout & Upload Bukti DANA (`/checkout` → `/order/[orderCode]`):** Buat pesanan dengan metode DANA, unggah screenshot bukti transfer (JPG/PNG/WebP maks 3 MB), lalu cek status di `/lacak`.
+5. **Approval Admin & Stok Atomik (`/admin/pesanan`):** Buka tab *Menunggu Approval*, klik **Tinjau**, perbesar bukti transfer DANA, lalu klik **Approve / Setujui Pesanan** (stok butir/gram otomatis terpotong) atau **Tolak Pesanan** dengan alasan wajib (stok otomatis dikembalikan jika sempat dipotong).
 
 ---
 
-## 6. Build Produksi & Verifikasi
+## 6. Verifikasi Build
 
 ```bash
 npm run typecheck
@@ -79,5 +78,3 @@ npm run lint
 npm run build
 npm run start
 ```
-
-Saat deploy ke Vercel atau hosting Node.js lainnya, pastikan `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, dan `NEXT_PUBLIC_SITE_URL` (domain produksi `https://...`) sudah diisi di environment variables platform Anda.

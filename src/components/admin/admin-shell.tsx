@@ -4,6 +4,8 @@ import {
   AlertTriangle,
   ClipboardList,
   ExternalLink,
+  FileText,
+  ImageIcon,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -19,11 +21,16 @@ import { Dialog, DialogClose, DialogDescription, DialogTitle, SheetContent } fro
 import { signOut } from "@/lib/actions/auth";
 import { cn } from "@/lib/utils";
 
-const NAV = [
+const OPS_NAV = [
   { href: "/admin", label: "Ringkasan", icon: LayoutDashboard },
+  { href: "/admin/pesanan", label: "Pesanan & Approval", icon: ClipboardList, showBadge: true },
   { href: "/admin/produk", label: "Katalog & Stok", icon: Package },
-  { href: "/admin/pesanan", label: "Pesanan WA", icon: ClipboardList },
-  { href: "/admin/pengaturan", label: "Pengaturan Toko", icon: Settings },
+] as const;
+
+const CMS_NAV = [
+  { href: "/admin/tampilan", label: "Tampilan & Foto", icon: ImageIcon },
+  { href: "/admin/konten", label: "Konten & Copy", icon: FileText },
+  { href: "/admin/pengaturan", label: "Pembayaran & Toko", icon: Settings },
   { href: "/admin/testimoni", label: "Testimoni", icon: MessageSquareQuote },
 ] as const;
 
@@ -31,49 +38,81 @@ function SidebarBody({
   pathname,
   userEmail,
   configured,
+  pendingCount,
   onNavigate,
 }: {
   pathname: string;
   userEmail: string;
   configured: boolean;
+  pendingCount: number;
   onNavigate?: () => void;
 }) {
+  const renderLink = (item: {
+    href: string;
+    label: string;
+    icon: React.ComponentType<{ className?: string }>;
+    showBadge?: boolean;
+  }) => {
+    const Icon = item.icon;
+    const active = item.href === "/admin" ? pathname === "/admin" : pathname.startsWith(item.href);
+    return (
+      <Link
+        key={item.href}
+        href={item.href}
+        onClick={onNavigate}
+        className={cn(
+          "flex items-center justify-between gap-2 rounded-2xl px-3.5 py-2.5 text-sm font-medium transition",
+          active
+            ? "bg-gold font-semibold text-orchard shadow-soft"
+            : "text-cream/75 hover:bg-cream/10 hover:text-cream",
+        )}
+      >
+        <span className="flex items-center gap-3">
+          <Icon className="size-4 shrink-0" />
+          <span>{item.label}</span>
+        </span>
+        {item.showBadge && pendingCount > 0 ? (
+          <span
+            className={cn(
+              "rounded-full px-2 py-0.5 font-mono text-[11px] font-bold tabular",
+              active ? "bg-orchard text-gold" : "bg-gold text-orchard",
+            )}
+          >
+            {pendingCount}
+          </span>
+        ) : null}
+      </Link>
+    );
+  };
+
   return (
-    <div className="flex h-full flex-col justify-between bg-orchard p-5 text-cream">
+    <div className="flex h-full flex-col justify-between overflow-y-auto bg-orchard p-5 text-cream">
       <div className="space-y-6">
-        <div className="flex items-center justify-between gap-2 border-b border-cream/10 pb-4">
+        <div className="border-b border-cream/10 pb-4">
           <Link href="/admin" onClick={onNavigate} className="space-y-0.5">
             <span className="block font-display text-xl font-bold text-cream">AgungDurian</span>
-            <span className="block text-[11px] font-medium text-gold">Panel Pengelola Kebun</span>
+            <span className="block text-[11px] font-medium text-gold">Admin CMS &amp; Approval</span>
           </Link>
         </div>
 
-        <nav className="space-y-1" aria-label="Menu admin">
-          {NAV.map((item) => {
-            const Icon = item.icon;
-            const active =
-              item.href === "/admin" ? pathname === "/admin" : pathname.startsWith(item.href);
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={onNavigate}
-                className={cn(
-                  "flex items-center gap-3 rounded-2xl px-3.5 py-2.5 text-sm font-medium transition",
-                  active
-                    ? "bg-gold text-orchard font-semibold shadow-soft"
-                    : "text-cream/75 hover:bg-cream/10 hover:text-cream",
-                )}
-              >
-                <Icon className="size-4 shrink-0" />
-                <span>{item.label}</span>
-              </Link>
-            );
-          })}
+        <nav className="space-y-5" aria-label="Menu admin">
+          <div className="space-y-1">
+            <p className="px-3.5 pb-1 text-[10px] font-bold uppercase tracking-[0.18em] text-cream/45">
+              Operasional
+            </p>
+            {OPS_NAV.map(renderLink)}
+          </div>
+
+          <div className="space-y-1">
+            <p className="px-3.5 pb-1 text-[10px] font-bold uppercase tracking-[0.18em] text-cream/45">
+              Editor Website
+            </p>
+            {CMS_NAV.map(renderLink)}
+          </div>
         </nav>
       </div>
 
-      <div className="space-y-3 border-t border-cream/10 pt-4">
+      <div className="mt-6 space-y-3 border-t border-cream/10 pt-4">
         <Link
           href="/"
           target="_blank"
@@ -93,7 +132,7 @@ function SidebarBody({
           <form action={signOut}>
             <button
               type="submit"
-              className="flex w-full items-center justify-center gap-2 rounded-full border border-cream/15 py-2 text-xs font-semibold text-cream/80 transition hover:bg-crimson hover:border-crimson hover:text-white"
+              className="flex w-full items-center justify-center gap-2 rounded-full border border-cream/15 py-2 text-xs font-semibold text-cream/80 transition hover:border-crimson hover:bg-crimson hover:text-white"
             >
               <LogOut className="size-3.5" />
               Keluar
@@ -108,10 +147,12 @@ function SidebarBody({
 export function AdminShell({
   userEmail,
   configured,
+  pendingApprovalCount = 0,
   children,
 }: {
   userEmail: string;
   configured: boolean;
+  pendingApprovalCount?: number;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -121,7 +162,12 @@ export function AdminShell({
     <div className="min-h-dvh bg-cream text-bark lg:flex">
       <aside className="hidden w-64 shrink-0 lg:block">
         <div className="sticky top-0 h-dvh">
-          <SidebarBody pathname={pathname} userEmail={userEmail} configured={configured} />
+          <SidebarBody
+            pathname={pathname}
+            userEmail={userEmail}
+            configured={configured}
+            pendingCount={pendingApprovalCount}
+          />
         </div>
       </aside>
 
@@ -149,9 +195,8 @@ export function AdminShell({
               <AlertTriangle className="size-4 shrink-0 text-gold-hover" />
               <p>
                 <strong>Mode Pratinjau Lokal:</strong> Supabase belum terhubung. Data contoh ditampilkan untuk pratinjau
-                UI. Ikuti <code className="rounded bg-orchard/10 px-1 font-mono">SETUP_GUIDE.md</code> dan isi{" "}
-                <code className="rounded bg-orchard/10 px-1 font-mono">.env.local</code> untuk mengaktifkan penyimpanan
-                &amp; autentikasi penuh.
+                UI. Ikuti <code className="rounded bg-orchard/10 px-1 font-mono">SETUP_GUIDE.md</code> untuk mengaktifkan
+                penyimpanan &amp; autentikasi penuh.
               </p>
             </div>
           </div>
@@ -169,6 +214,7 @@ export function AdminShell({
               pathname={pathname}
               userEmail={userEmail}
               configured={configured}
+              pendingCount={pendingApprovalCount}
               onNavigate={() => setMobileOpen(false)}
             />
             <DialogClose className="absolute right-4 top-4 rounded-full bg-cream/10 px-2.5 py-1 text-xs text-cream">

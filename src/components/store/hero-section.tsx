@@ -2,7 +2,6 @@
 
 import { motion, useReducedMotion, useScroll, useTransform } from "framer-motion";
 import { ArrowDownRight, Compass, MapPin, PackageCheck, Scale } from "lucide-react";
-import Image from "next/image";
 import Link from "next/link";
 import { useRef, useState } from "react";
 
@@ -11,6 +10,7 @@ import { RollingNumber } from "@/components/motion/rolling-number";
 import { RotatingSeal } from "@/components/motion/rotating-seal";
 import { LiveDot } from "@/components/store/announcement-bar";
 import { ContourLines, StarRow } from "@/components/store/ornaments";
+import { ProductImage } from "@/components/store/product-image";
 import { buttonVariants } from "@/components/ui/button";
 import { HARVEST_STATUS_META } from "@/lib/constants";
 import { butirUnitPrice, gramBasePrice } from "@/lib/pricing";
@@ -53,7 +53,7 @@ export function HeroSection({ settings, products }: { settings: StoreSettings; p
           <div className="flex flex-wrap items-center gap-3">
             <span className="inline-flex items-center gap-2 rounded-full border border-cream/15 bg-cream/[0.07] px-3.5 py-1.5 text-xs font-semibold tracking-wide text-custard backdrop-blur-sm">
               <LiveDot tone={statusMeta.tone} />
-              {statusMeta.label} · Kebun Sigaluh
+              {statusMeta.label} · {settings.hero_badge_text}
             </span>
             <a
               href="#testimoni"
@@ -76,7 +76,7 @@ export function HeroSection({ settings, products }: { settings: StoreSettings; p
 
           <div className="flex flex-wrap items-center gap-3.5">
             <Link href="#katalog" className={buttonVariants({ variant: "gold", size: "lg" })}>
-              Jelajahi Katalog Panen
+              {settings.cta_primary_text}
               <ArrowDownRight className="size-4" />
             </Link>
             <Link
@@ -169,9 +169,9 @@ export function HeroSection({ settings, products }: { settings: StoreSettings; p
         <div className="relative lg:col-span-5">
           <motion.div style={{ y: parallaxY }} className="relative mx-auto max-w-md lg:max-w-none">
             <div className="relative aspect-[4/4.5] overflow-hidden rounded-[2.25rem] border border-cream/15 bg-orchard-2 shadow-lift">
-              <Image
-                src="/images/hero.webp"
-                alt="Durian matang pohon dibelah di atas daun pisang dari kebun AgungDurian Sigaluh"
+              <ProductImage
+                src={settings.hero_image_url}
+                alt={`Durian matang pohon dari kebun ${settings.store_name}`}
                 fill
                 priority
                 sizes="(max-width: 1024px) 92vw, 42vw"

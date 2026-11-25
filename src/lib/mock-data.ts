@@ -1,4 +1,5 @@
-import type { Order, Product, StoreSettings, Testimonial } from "@/types/database";
+import { DEFAULT_WHY_ITEMS } from "@/lib/constants";
+import type { Order, Product, PublicOrder, StoreSettings, Testimonial } from "@/types/database";
 
 /**
  * Typed mirror of `supabase/seed.sql`.
@@ -38,6 +39,26 @@ export const MOCK_SETTINGS: StoreSettings = {
     "Setiap buah jatuh sendiri saat benar-benar matang — legit, wangi, dan bergaransi manis. Beli per butir utuh atau per gram daging kupas, langsung dari kebun Pak Agung.",
   google_rating: 4.7,
   google_review_count: 33,
+  hero_image_url: "/images/hero.webp",
+  logo_image_url: null,
+  og_image_url: "/images/og-image.jpg",
+  story_image_url: null,
+  location_image_url: null,
+  dana_qr_image_url: null,
+  hero_badge_text: "Kebun Sigaluh",
+  cta_primary_text: "Jelajahi Katalog Panen",
+  footer_description:
+    "Kebun durian keluarga di lereng Sigaluh. Hanya menjual buah jatuhan matang pohon dengan garansi ganti baru bila hambar atau mentah.",
+  why_items_json: DEFAULT_WHY_ITEMS,
+  payment_dana_enabled: true,
+  payment_dana_number: "081391094308",
+  payment_dana_holder: "Durian Pak Agung",
+  payment_dana_instructions:
+    "Transfer sesuai total pesanan ke nomor DANA di atas, lalu unggah screenshot/foto bukti transfer agar pesanan segera disetujui admin.",
+  payment_cod_enabled: true,
+  payment_cod_notes: "Bayar tunai langsung saat kurir tiba (area Banjarnegara & sekitar).",
+  payment_pickup_enabled: true,
+  payment_pickup_notes: "Ambil langsung di lapak Karangmangu, Sigaluh. Bisa pilih & cicipi di tempat.",
   updated_at: ts,
 };
 
@@ -262,4 +283,171 @@ export const MOCK_TESTIMONIALS: Testimonial[] = [
   },
 ];
 
-export const MOCK_ORDERS: Order[] = [];
+export const MOCK_ORDERS: Order[] = [
+  {
+    id: "20000000-0000-4000-8000-000000000001",
+    order_code: "AGD-20261125-DANA",
+    customer_name: "Rizky Pratama",
+    customer_phone: "6281223344556",
+    delivery_method: "shipping_vacuum",
+    delivery_address: "Jl. Pandanaran No. 45, Mugassari, Semarang Selatan",
+    notes: "Mohon pilih yang legit & wangi ya Pak",
+    items_json: [
+      {
+        mode: "gram",
+        product_id: "00000000-0000-4000-8000-000000000002",
+        product_name: "Durian Bawor Kaki Tiga",
+        grams: 500,
+        packaging: "vacuum",
+        quantity: 2,
+        unit_price: 87500,
+        line_total: 175000,
+      },
+    ],
+    total_amount: 175000,
+    payment_method: "dana",
+    payment_status: "waiting_verification",
+    payment_proof_url: "/images/products/bawor.webp",
+    approval_status: "pending_approval",
+    status: "pending_approval",
+    admin_note: null,
+    approved_at: null,
+    approved_by: null,
+    status_history_json: [
+      {
+        status: "pending_approval",
+        note: "Pesanan dibuat pembeli melalui checkout.",
+        timestamp: "2026-11-25T08:15:00.000Z",
+        actor: "customer",
+      },
+      {
+        status: "pending_approval",
+        note: "Pembeli mengunggah bukti transfer DANA.",
+        timestamp: "2026-11-25T08:17:00.000Z",
+        actor: "customer",
+      },
+    ],
+    stock_deducted: false,
+    created_at: "2026-11-25T08:15:00.000Z",
+  },
+  {
+    id: "20000000-0000-4000-8000-000000000002",
+    order_code: "AGD-20261125-COD9",
+    customer_name: "Siti Rahayu",
+    customer_phone: "6285712349876",
+    delivery_method: "local_delivery",
+    delivery_address: "Perum Kutabanjarnegara Asri Blok C-12, Banjarnegara",
+    notes: "Antar sore sekitar jam 16.00",
+    items_json: [
+      {
+        mode: "butir",
+        product_id: "00000000-0000-4000-8000-000000000001",
+        product_name: "Durian Lokal Super Sigaluh",
+        size: "besar",
+        preparation: "kupas",
+        quantity: 2,
+        unit_price: 115000,
+        line_total: 230000,
+      },
+    ],
+    total_amount: 230000,
+    payment_method: "cod",
+    payment_status: "unpaid",
+    payment_proof_url: null,
+    approval_status: "approved",
+    status: "ready_or_shipping",
+    admin_note: "Kurir berangkat pukul 15.30 WIB",
+    approved_at: "2026-11-25T07:05:00.000Z",
+    approved_by: "admin@agungdurian.id",
+    status_history_json: [
+      {
+        status: "pending_approval",
+        note: "Pesanan dibuat pembeli melalui checkout.",
+        timestamp: "2026-11-25T06:50:00.000Z",
+        actor: "customer",
+      },
+      {
+        status: "approved",
+        note: "Pesanan disetujui admin & stok diamankan.",
+        timestamp: "2026-11-25T07:05:00.000Z",
+        actor: "admin@agungdurian.id",
+      },
+      {
+        status: "ready_or_shipping",
+        note: "Kurir berangkat pukul 15.30 WIB",
+        timestamp: "2026-11-25T08:30:00.000Z",
+        actor: "admin@agungdurian.id",
+      },
+    ],
+    stock_deducted: true,
+    created_at: "2026-11-25T06:50:00.000Z",
+  },
+  {
+    id: "20000000-0000-4000-8000-000000000003",
+    order_code: "AGD-20261124-PKUP",
+    customer_name: "Adi Nugroho",
+    customer_phone: "6281399887766",
+    delivery_method: "pickup",
+    delivery_address: null,
+    notes: "Makan di saung bersama keluarga",
+    items_json: [
+      {
+        mode: "butir",
+        product_id: "00000000-0000-4000-8000-000000000004",
+        product_name: "Durian Musang King Premium",
+        size: "sedang",
+        preparation: "kupas",
+        quantity: 1,
+        unit_price: 325000,
+        line_total: 325000,
+      },
+    ],
+    total_amount: 325000,
+    payment_method: "ambil_di_tempat",
+    payment_status: "paid",
+    payment_proof_url: null,
+    approval_status: "approved",
+    status: "completed",
+    admin_note: "Sudah diambil & lunas di lapak",
+    approved_at: "2026-11-24T04:10:00.000Z",
+    approved_by: "admin@agungdurian.id",
+    status_history_json: [
+      {
+        status: "pending_approval",
+        note: "Pesanan dibuat pembeli melalui checkout.",
+        timestamp: "2026-11-24T04:00:00.000Z",
+        actor: "customer",
+      },
+      {
+        status: "completed",
+        note: "Pesanan selesai diterima pembeli.",
+        timestamp: "2026-11-24T06:30:00.000Z",
+        actor: "admin@agungdurian.id",
+      },
+    ],
+    stock_deducted: true,
+    created_at: "2026-11-24T04:00:00.000Z",
+  },
+];
+
+export function toPublicOrder(order: Order): PublicOrder {
+  const phone = order.customer_phone;
+  const masked_phone = `${phone.slice(0, 5)}****${phone.slice(-3)}`;
+  return {
+    order_code: order.order_code,
+    customer_name: order.customer_name,
+    masked_phone,
+    delivery_method: order.delivery_method,
+    payment_method: order.payment_method,
+    payment_status: order.payment_status,
+    payment_proof_url: order.payment_proof_url,
+    approval_status: order.approval_status,
+    status: order.status,
+    admin_note: order.admin_note,
+    items_json: order.items_json,
+    total_amount: order.total_amount,
+    status_history_json: order.status_history_json,
+    approved_at: order.approved_at,
+    created_at: order.created_at,
+  };
+}

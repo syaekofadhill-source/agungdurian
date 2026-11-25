@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 import { AdminShell } from "@/components/admin/admin-shell";
-import { getAdminSession } from "@/lib/data/admin";
+import { getAdminSession, getPendingApprovalCount } from "@/lib/data/admin";
 
 export const metadata: Metadata = {
   title: { default: "Admin CMS", template: "%s · Admin AgungDurian" },
@@ -11,10 +11,17 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 export default async function AdminDashboardLayout({ children }: { children: React.ReactNode }) {
-  const session = await getAdminSession();
+  const [session, pendingApprovalCount] = await Promise.all([
+    getAdminSession(),
+    getPendingApprovalCount(),
+  ]);
 
   return (
-    <AdminShell userEmail={session.userEmail} configured={session.configured}>
+    <AdminShell
+      userEmail={session.userEmail}
+      configured={session.configured}
+      pendingApprovalCount={pendingApprovalCount}
+    >
       {children}
     </AdminShell>
   );

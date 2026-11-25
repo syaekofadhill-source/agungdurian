@@ -2,6 +2,7 @@ import { ArrowUpRight, Clock, MapPin, MessageCircle, ShieldCheck } from "lucide-
 import Link from "next/link";
 
 import { InstagramIcon, LeafSprig, StarRow } from "@/components/store/ornaments";
+import { ProductImage } from "@/components/store/product-image";
 import { prettyPhone } from "@/lib/utils";
 import { buildWhatsAppUrl } from "@/lib/whatsapp";
 import type { StoreSettings } from "@/types/database";
@@ -21,18 +22,19 @@ export function StoreFooter({ settings }: { settings: StoreSettings }) {
         <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-12">
           <div className="space-y-4 lg:col-span-5">
             <div className="flex items-center gap-3">
-              <span className="grid size-10 place-items-center rounded-2xl bg-gold/15 text-gold ring-1 ring-gold/30">
-                <ShieldCheck className="size-5" />
+              <span className="relative grid size-10 place-items-center overflow-hidden rounded-2xl bg-gold/15 text-gold ring-1 ring-gold/30">
+                {settings.logo_image_url ? (
+                  <ProductImage src={settings.logo_image_url} alt={settings.store_name} fill sizes="40px" />
+                ) : (
+                  <ShieldCheck className="size-5" />
+                )}
               </span>
               <div>
                 <p className="font-display text-2xl font-bold tracking-tight text-cream">{settings.store_name}</p>
                 <p className="text-xs text-cream/65">{settings.tagline}</p>
               </div>
             </div>
-            <p className="max-w-md text-sm leading-relaxed text-cream/75">
-              Kebun durian keluarga di lereng Sigaluh. Hanya menjual buah jatuhan matang pohon dengan garansi ganti baru
-              bila hambar atau mentah.
-            </p>
+            <p className="max-w-md text-sm leading-relaxed text-cream/75">{settings.footer_description}</p>
             <div className="inline-flex items-center gap-2.5 rounded-full bg-cream/10 px-3.5 py-1.5 text-xs">
               <StarRow rating={settings.google_rating} className="text-cream" />
               <span className="font-mono font-semibold tabular text-custard">{settings.google_rating}/5</span>
@@ -66,6 +68,11 @@ export function StoreFooter({ settings }: { settings: StoreSettings }) {
               <li>
                 <Link href="/#lokasi" className="transition hover:text-gold">
                   Kunjungi Kebun
+                </Link>
+              </li>
+              <li>
+                <Link href="/lacak" className="transition hover:text-gold">
+                  Lacak Pesanan
                 </Link>
               </li>
             </ul>

@@ -1,11 +1,15 @@
 import type {
+  ApprovalStatus,
   ButirPreparation,
   ButirSize,
   DeliveryMethod,
   GramPackaging,
   HarvestStatus,
   OrderStatus,
+  PaymentMethod,
+  PaymentStatus,
   VarietyCategory,
+  WhyItem,
 } from "@/types/database";
 
 export const CATEGORY_LABEL: Record<VarietyCategory, string> = {
@@ -30,11 +34,73 @@ export const HARVEST_STATUS_META: Record<
   pre_order: { label: "Pre-Order Musim Depan", short: "Pre-order", tone: "gold" },
 };
 
-export const ORDER_STATUS_META: Record<OrderStatus, { label: string; className: string }> = {
-  pending: { label: "Menunggu", className: "bg-gold/15 text-[#8a5f00] ring-gold/40" },
-  confirmed: { label: "Dikonfirmasi", className: "bg-emerald-700/10 text-emerald-800 ring-emerald-700/30" },
-  completed: { label: "Selesai", className: "bg-orchard/10 text-orchard ring-orchard/30" },
-  cancelled: { label: "Dibatalkan", className: "bg-crimson/10 text-crimson ring-crimson/30" },
+export const ORDER_STATUS_META: Record<OrderStatus, { label: string; short: string; className: string }> = {
+  pending_approval: {
+    label: "Menunggu Persetujuan",
+    short: "Menunggu",
+    className: "bg-gold/15 text-[#8a5f00] ring-gold/40",
+  },
+  approved: {
+    label: "Disetujui Admin",
+    short: "Disetujui",
+    className: "bg-emerald-700/10 text-emerald-800 ring-emerald-700/30",
+  },
+  preparing: {
+    label: "Sedang Disiapkan",
+    short: "Disiapkan",
+    className: "bg-sky-700/10 text-sky-900 ring-sky-700/30",
+  },
+  ready_or_shipping: {
+    label: "Siap Diambil / Dikirim",
+    short: "Siap / Kirim",
+    className: "bg-indigo-700/10 text-indigo-900 ring-indigo-700/30",
+  },
+  completed: {
+    label: "Selesai",
+    short: "Selesai",
+    className: "bg-orchard/10 text-orchard ring-orchard/30",
+  },
+  rejected: {
+    label: "Ditolak Admin",
+    short: "Ditolak",
+    className: "bg-crimson/10 text-crimson ring-crimson/30",
+  },
+  cancelled: {
+    label: "Dibatalkan",
+    short: "Dibatalkan",
+    className: "bg-bark/10 text-moss ring-bark/20",
+  },
+};
+
+export const APPROVAL_STATUS_META: Record<ApprovalStatus, { label: string; className: string }> = {
+  pending_approval: { label: "Menunggu Approval", className: "bg-gold/15 text-[#8a5f00] ring-gold/40" },
+  approved: { label: "Disetujui", className: "bg-emerald-700/10 text-emerald-800 ring-emerald-700/30" },
+  rejected: { label: "Ditolak", className: "bg-crimson/10 text-crimson ring-crimson/30" },
+};
+
+export const PAYMENT_METHOD_META: Record<PaymentMethod, { label: string; short: string; badgeClass: string }> = {
+  dana: {
+    label: "Transfer DANA",
+    short: "DANA",
+    badgeClass: "bg-sky-600/10 text-sky-900 ring-sky-600/25",
+  },
+  cod: {
+    label: "COD (Bayar di Tempat)",
+    short: "COD",
+    badgeClass: "bg-amber-600/10 text-[#8a5f00] ring-amber-600/25",
+  },
+  ambil_di_tempat: {
+    label: "Bayar & Ambil di Kebun",
+    short: "Ambil di Tempat",
+    badgeClass: "bg-orchard/10 text-orchard ring-orchard/20",
+  },
+};
+
+export const PAYMENT_STATUS_META: Record<PaymentStatus, { label: string; className: string }> = {
+  unpaid: { label: "Belum Dibayar", className: "bg-cream-2 text-moss ring-orchard/15" },
+  waiting_verification: { label: "Menunggu Verifikasi Bukti", className: "bg-gold/15 text-[#8a5f00] ring-gold/40" },
+  paid: { label: "Lunas / Terverifikasi", className: "bg-emerald-700/10 text-emerald-800 ring-emerald-700/30" },
+  rejected: { label: "Bukti Ditolak", className: "bg-crimson/10 text-crimson ring-crimson/30" },
 };
 
 export const DELIVERY_METHOD_META: Record<DeliveryMethod, { label: string; hint: string; needsAddress: boolean }> = {
@@ -83,3 +149,36 @@ export const LOW_STOCK_BUTIR = 5;
 export const LOW_STOCK_GRAM = 1000;
 
 export const PRODUCT_IMAGE_BUCKET = "product-images";
+export const SITE_ASSETS_BUCKET = "site-assets";
+export const PAYMENT_PROOFS_BUCKET = "payment-proofs";
+
+export const DEFAULT_WHY_ITEMS: WhyItem[] = [
+  {
+    title: "Garansi ganti baru jika hambar atau mengkal.",
+    description:
+      "Makan langsung di kebun atau kirim ke rumah — bila ada buah yang kurang matang, berair, atau hambar, langsung kami tukar baru tanpa drama.",
+    badge: "Komitmen Utama",
+    icon: "shield",
+  },
+  {
+    title: "Matang pohon, bukan peraman.",
+    description:
+      "Buah diikat tali pengaman di dahan lereng Sigaluh dan baru dipungut setelah jatuh alami. Rasa legit dan aromanya jauh lebih dalam.",
+    badge: "Panen harian · ±480 mdpl",
+    icon: "sprout",
+  },
+  {
+    title: "Timbangan digital jujur.",
+    description:
+      "Baik beli per butir utuh maupun daging kupas per gram, semuanya ditimbang terbuka dengan timbangan digital terkalibrasi.",
+    badge: "Presisi kelipatan 50g",
+    icon: "scale",
+  },
+  {
+    title: "Santap di saung, COD Banjarnegara, atau kirim Vacuum.",
+    description:
+      "Nikmati langsung di kebun Karangmangu, pesan antar area Banjarnegara & sekitar, atau kirim luar kota dengan kemasan Vacuum Pack + ice gel.",
+    badge: "Ambil · COD · Vacuum",
+    icon: "truck",
+  },
+];
