@@ -4,17 +4,23 @@ import { DurianRecommender } from "@/components/store/durian-recommender";
 import { HeroSection } from "@/components/store/hero-section";
 import { TestimonialsLocation } from "@/components/store/testimonials-location";
 import { WhyAgungSection } from "@/components/store/why-agung-section";
-import { getActiveProducts, getStoreSettings, getVisibleTestimonials } from "@/lib/data/store";
+import {
+  getActiveCustomOptions,
+  getActiveProducts,
+  getStoreSettings,
+  getVisibleTestimonials,
+} from "@/lib/data/store";
 import { isSoldOut, startingPrice } from "@/lib/pricing";
 import { getSiteUrl } from "@/lib/utils";
 
 export const revalidate = 60;
 
 export default async function HomePage() {
-  const [settings, products, testimonials] = await Promise.all([
+  const [settings, products, testimonials, customOptions] = await Promise.all([
     getStoreSettings(),
     getActiveProducts(),
     getVisibleTestimonials(),
+    getActiveCustomOptions(),
   ]);
 
   const siteUrl = getSiteUrl();
@@ -78,9 +84,17 @@ export default async function HomePage() {
         <Marquee items={settings.marquee_items} />
       </div>
 
-      <CatalogSection products={products} />
+      <CatalogSection
+        products={products}
+        customOptions={customOptions}
+        gramPresets={settings.gram_presets_json}
+      />
       <WhyAgungSection settings={settings} />
-      <DurianRecommender products={products} />
+      <DurianRecommender
+        products={products}
+        customOptions={customOptions}
+        gramPresets={settings.gram_presets_json}
+      />
       <TestimonialsLocation settings={settings} testimonials={testimonials} />
     </>
   );

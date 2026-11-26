@@ -204,3 +204,43 @@ insert into public.testimonials (customer_name, origin_city, rating, comment, pu
 ('Hendra Wijaya', 'Yogyakarta', 4,
  'Musang King-nya creamy dan wangi, kualitas setara yang di Malaysia. Sempat dapat satu yang kurang matang, langsung diganti baru tanpa ribet. Pelayanannya juara.',
  'Durian Musang King Premium · 500g', true);
+
+-- -----------------------------------------------------------------------------
+-- V3 Default Custom Options, Delivery Zones & Promo Vouchers
+-- -----------------------------------------------------------------------------
+insert into public.custom_options (
+  option_type, code, name, description, applies_to, extra_price, price_multiplier, weight_label, badge, is_default, is_active, sort_order
+) values
+  ('packing', 'thinwall', 'Thinwall Box Segar', 'Kemasan food-grade untuk santap hari ini', 'gram', 0, 1.00, null, 'Gratis', true, true, 1),
+  ('packing', 'vacuum', 'Vacuum Pack Tahan Kirim', 'Kedap udara, menjaga aroma & kesegaran', 'gram', 5000, 1.00, null, 'Populer', false, true, 2),
+  ('packing', 'styrofoam-ice', 'Box Styrofoam + Ice Gel', 'Tahan dingin hingga 24 jam untuk kirim luar kota', 'both', 25000, 1.00, null, 'Luar Kota', false, true, 3),
+  ('packing', 'hampers-bambu', 'Keranjang Hampers Bambu + Pita', 'Kemasan eksklusif siap hadiah & oleh-oleh', 'both', 35000, 1.00, null, 'Hadiah', false, true, 4),
+  ('preparation', 'utuh', 'Kirim Utuh (Belum Dibuka)', 'Buah utuh berduri, bisa dibuka sendiri saat santap', 'butir', 0, 1.00, null, 'Gratis', true, true, 1),
+  ('preparation', 'kupas', 'Kupas Rapi di Tempat', 'Dibukakan dan ditata rapi di wadah food-grade', 'butir', 0, 1.00, null, 'Praktis', false, true, 2),
+  ('preparation', 'kupas-pisah-biji', 'Kupas & Pisah Biji (Daging Saja)', 'Daging durian murni bebas cangkang & biji', 'butir', 10000, 1.00, null, 'Siap Olah', false, true, 3),
+  ('butir_grade', 'sedang', 'Sedang', 'Ukuran pas untuk 1-2 orang', 'butir', 0, 1.00, '±1,8 kg', null, true, true, 1),
+  ('butir_grade', 'besar', 'Besar', 'Juring lebih penuh untuk keluarga kecil', 'butir', 0, 1.30, '±2,5 kg', 'Favorit', false, true, 2),
+  ('butir_grade', 'jumbo', 'Jumbo', 'Buah pilihan terbesar dari panen pagi', 'butir', 0, 1.65, '±3,2 kg', 'Puas', false, true, 3),
+  ('category', 'lokal', 'Lokal Sigaluh', 'Durian lokal pilihan dari pohon tua Sigaluh', 'both', 0, 1.00, null, null, true, true, 1),
+  ('category', 'premium', 'Premium / Unggulan', 'Bawor, Montong, Musang King & Ochee', 'both', 0, 1.00, null, null, false, true, 2),
+  ('category', 'kupas', 'Paket Kupas / Box', 'Daging kupas segar siap santap', 'gram', 0, 1.00, null, null, false, true, 3),
+  ('checkout_addon', 'kartu-ucapan', 'Kartu Ucapan Custom', 'Tulis pesan ucapan di catatan pesanan', 'order', 5000, 1.00, null, null, false, true, 1),
+  ('checkout_addon', 'extra-ice-gel', 'Extra Ice Gel Pack', 'Tambahan pendingin untuk pengiriman jarak jauh', 'order', 7000, 1.00, null, 'Dingin Ekstra', false, true, 2),
+  ('checkout_addon', 'alat-makan', 'Sarung Tangan & Sendok Makan Set', 'Perlengkapan santap praktis & higienis', 'order', 0, 1.00, null, 'Gratis', false, true, 3)
+on conflict (option_type, code) do nothing;
+
+insert into public.delivery_zones (name, description, shipping_fee, estimated_time, allow_cod, is_active, sort_order)
+select * from (
+  values
+    ('Kecamatan Sigaluh (Area Kebun)', 'Pengantaran cepat sekitar Karangmangu & Sigaluh', 0, '30–60 menit', true, true, 1),
+    ('Banjarnegara Kota & Sekitarnya', 'Kurir langsung dari kebun ke alamat rumah', 10000, '1–2 jam', true, true, 2),
+    ('Purbalingga / Wonosobo / Purwokerto', 'Kurir antar kota / travel sore hari', 25000, 'Hari yang sama', false, true, 3),
+    ('Kirim Luar Kota (Express Cold Pack)', 'Pengiriman kilat seluruh Jawa dengan es gel', 45000, '1 hari sampai', false, true, 4)
+) as v(name, description, shipping_fee, estimated_time, allow_cod, is_active, sort_order)
+where not exists (select 1 from public.delivery_zones);
+
+insert into public.promo_vouchers (code, description, discount_type, discount_value, max_discount, min_subtotal, usage_limit, is_active)
+values
+  ('SIGALUH10', 'Diskon 10% (maks. Rp30.000) untuk belanja minimal Rp100.000', 'percent', 10, 30000, 100000, null, true),
+  ('PANENRAYA', 'Potongan langsung Rp15.000 untuk belanja minimal Rp150.000', 'fixed', 15000, null, 150000, null, true)
+on conflict (code) do nothing;

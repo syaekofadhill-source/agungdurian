@@ -7,7 +7,13 @@ import {
 } from "@/lib/constants";
 import { getButirSize } from "@/lib/pricing";
 import { formatGram, formatRupiah, getSiteUrl, sanitizePhone } from "@/lib/utils";
-import type { DeliveryMethod, OrderItem, OrderStatus, PaymentMethod } from "@/types/database";
+import type {
+  DeliveryMethod,
+  OrderAddonSnapshot,
+  OrderItem,
+  OrderStatus,
+  PaymentMethod,
+} from "@/types/database";
 
 export function buildWhatsAppUrl(phone: string, message?: string): string {
   const base = `https://wa.me/${sanitizePhone(phone)}`;
@@ -16,15 +22,20 @@ export function buildWhatsAppUrl(phone: string, message?: string): string {
 
 export function describeOrderItem(item: OrderItem): { title: string; detail: string } {
   if (item.mode === "butir") {
-    const size = getButirSize(item.size);
+    const gradeLabel = item.grade_name ?? getButirSize(item.size).label;
+    const prepLabel = item.preparation_name ?? BUTIR_PREPARATION_LABEL[item.preparation] ?? item.preparation;
+    const parts = [`Ukuran ${gradeLabel}`, prepLabel];
+    if (item.packing_name) parts.push(item.packing_name);
     return {
       title: `${item.product_name} — Per Butir (Utuh)`,
-      detail: `Ukuran ${size.label} · ${BUTIR_PREPARATION_LABEL[item.preparation]}`,
+      detail: parts.join(" · "),
     };
   }
+  const packLabel =
+    item.packing_name ?? GRAM_PACKAGING_META[item.packaging]?.label ?? item.packaging;
   return {
     title: `${item.product_name} — Per Gram (Kupas)`,
-    detail: `${formatGram(item.grams)} · ${GRAM_PACKAGING_META[item.packaging].label}`,
+    detail: `${formatGram(item.grams)} · ${packLabel}`,
   };
 }
 
@@ -38,6 +49,12 @@ export function buildOrderMessage(params: {
   deliveryAddress?: string | null;
   notes?: string | null;
   items: OrderItem[];
+  subtotalAmount?: number;
+  addons?: OrderAddonSnapshot[];
+  deliveryZoneName?: string | null;
+  shippingFee?: number;
+  voucherCode?: string | null;
+  discountAmount?: number;
   total: number;
   hasProof?: boolean;
 }): string {
@@ -49,6 +66,7 @@ export function buildOrderMessage(params: {
   lines.push(`👤 Nama: ${params.customerName}`);
   if (params.customerPhone) lines.push(`📱 No. HP: +${params.customerPhone}`);
   lines.push(`🚚 Pengambilan: ${DELIVERY_METHOD_META[params.deliveryMethod].label}`);
+  if (params.deliveryZoneName) lines.push(`🗺️ Zona Ongkir: ${params.deliveryZoneName}`);
   lines.push(`💳 Pembayaran: ${PAYMENT_METHOD_META[params.paymentMethod].label}`);
   if (params.paymentMethod === "dana") {
     lines.push(params.hasProof ? `✅ Bukti transfer DANA sudah diunggah di invoice.` : `⏳ Pembayaran DANA menyusul di halaman invoice.`);
@@ -62,9 +80,20 @@ export function buildOrderMessage(params: {
     lines.push(`   ${detail}`);
     lines.push(`   ${item.quantity} × ${formatRupiah(item.unit_price)} = *${formatRupiah(item.line_total)}*`);
   });
+  if (params.addons && params.addons.length > 0) {
+    lines.push("");
+    lines.push("*ADD-ON PESANAN*");
+    params.addons.forEach((a) => {
+      lines.push(`• ${a.name}: ${a.price === 0 ? "Gratis" : formatRupiah(a.price)}`);
+    });
+  }
   lines.push("");
-  lines.push(`💰 *Subtotal: ${formatRupiah(params.total)}*`);
-  if (params.deliveryMethod !== "pickup") lines.push("_(Ongkir menyusul, dikonfirmasi admin)_");
+  if (params.subtotalAmount !== undefined) lines.push(`Subtotal Produk: ${formatRupiah(params.subtotalAmount)}`);
+  if (params.shippingFee && params.shippingFee > 0) lines.push(`Ongkir Zona: ${formatRupiah(params.shippingFee)}`);
+  if (params.voucherCode && params.discountAmount && params.discountAmount > 0) {
+    lines.push(`Voucher (${params.voucherCode}): -${formatRupiah(params.discountAmount)}`);
+  }
+  lines.push(`💰 *Total Bayar: ${formatRupiah(params.total)}*`);
   if (params.notes) {
     lines.push("");
     lines.push(`📝 Catatan: ${params.notes}`);

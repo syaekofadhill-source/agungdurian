@@ -147,7 +147,10 @@ export function OrderDetailModal({
                 <p className="text-[10px] font-bold uppercase tracking-wider text-moss">Pembeli &amp; Pengambilan</p>
                 <p className="text-sm font-bold text-orchard">{order.customer_name}</p>
                 <p className="font-mono text-moss tabular">{prettyPhone(order.customer_phone)}</p>
-                <p className="pt-1 font-semibold text-bark">{DELIVERY_METHOD_META[order.delivery_method].label}</p>
+                <p className="pt-1 font-semibold text-bark">
+                  {DELIVERY_METHOD_META[order.delivery_method].label}
+                  {order.delivery_zone_name ? ` · ${order.delivery_zone_name}` : ""}
+                </p>
                 {order.delivery_address ? <p className="text-moss">{order.delivery_address}</p> : null}
                 {order.notes ? <p className="text-moss">Catatan pembeli: {order.notes}</p> : null}
               </div>
@@ -217,11 +220,47 @@ export function OrderDetailModal({
                   );
                 })}
               </ul>
-              <div className="flex items-baseline justify-between px-1 pt-1">
-                <span className="text-sm font-semibold text-moss">Total</span>
-                <span className="font-mono text-xl font-bold text-orchard tabular">
-                  {formatRupiah(order.total_amount)}
-                </span>
+              <div className="space-y-1.5 px-1 pt-2 text-xs">
+                {order.subtotal_amount ? (
+                  <div className="flex items-center justify-between text-moss">
+                    <span>Subtotal Produk</span>
+                    <span className="font-mono font-semibold text-orchard tabular">
+                      {formatRupiah(order.subtotal_amount)}
+                    </span>
+                  </div>
+                ) : null}
+                {order.addons_json && order.addons_json.length > 0 ? (
+                  order.addons_json.map((addon, i) => (
+                    <div key={i} className="flex items-center justify-between text-moss">
+                      <span>Add-on: {addon.name}</span>
+                      <span className="font-mono font-semibold text-orchard tabular">
+                        +{formatRupiah(addon.price)}
+                      </span>
+                    </div>
+                  ))
+                ) : null}
+                {order.delivery_zone_name ? (
+                  <div className="flex items-center justify-between text-moss">
+                    <span>Ongkir ({order.delivery_zone_name})</span>
+                    <span className="font-mono font-semibold text-orchard tabular">
+                      {(order.shipping_fee ?? 0) === 0 ? "Gratis" : `+${formatRupiah(order.shipping_fee ?? 0)}`}
+                    </span>
+                  </div>
+                ) : null}
+                {order.voucher_code && (order.discount_amount ?? 0) > 0 ? (
+                  <div className="flex items-center justify-between text-emerald-800">
+                    <span>Diskon ({order.voucher_code})</span>
+                    <span className="font-mono font-semibold tabular">
+                      -{formatRupiah(order.discount_amount ?? 0)}
+                    </span>
+                  </div>
+                ) : null}
+                <div className="flex items-baseline justify-between border-t border-orchard/10 pt-2">
+                  <span className="text-sm font-semibold text-moss">Total</span>
+                  <span className="font-mono text-xl font-bold text-orchard tabular">
+                    {formatRupiah(order.total_amount)}
+                  </span>
+                </div>
               </div>
             </div>
 

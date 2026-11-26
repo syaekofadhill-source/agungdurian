@@ -21,7 +21,7 @@ export const productSchema = z
       .toLowerCase()
       .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, { error: "Slug hanya huruf kecil, angka, dan tanda hubung" })
       .max(80),
-    variety_category: z.enum(["lokal", "premium", "kupas"]),
+    variety_category: z.string().trim().min(1, { error: "Kategori wajib dipilih" }).max(60),
     description: z.string().trim().max(1200).default(""),
     origin_notes: z.string().trim().max(800).default(""),
     image_url: imageUrl,

@@ -13,10 +13,6 @@ do $$ begin
 exception when duplicate_object then null; end $$;
 
 do $$ begin
-  create type public.variety_category as enum ('lokal', 'premium', 'kupas');
-exception when duplicate_object then null; end $$;
-
-do $$ begin
   create type public.delivery_method as enum ('pickup', 'local_delivery', 'shipping_vacuum');
 exception when duplicate_object then null; end $$;
 
@@ -75,6 +71,7 @@ create table if not exists public.store_settings (
   payment_cod_notes          text not null default 'Bayar tunai langsung saat kurir tiba (area Banjarnegara & sekitar).',
   payment_pickup_enabled     boolean not null default true,
   payment_pickup_notes       text not null default 'Ambil langsung di lapak Karangmangu, Sigaluh. Bisa pilih & cicipi di tempat.',
+  gram_presets_json          jsonb not null default '[250, 500, 750, 1000]'::jsonb,
   updated_at                 timestamptz not null default now()
 );
 
@@ -90,7 +87,7 @@ create table if not exists public.products (
   id                uuid primary key default gen_random_uuid(),
   slug              text not null unique check (slug ~ '^[a-z0-9]+(?:-[a-z0-9]+)*$'),
   name              text not null check (char_length(name) between 2 and 120),
-  variety_category  public.variety_category not null default 'lokal',
+  variety_category  text not null default 'lokal',
   description       text not null default '',
   origin_notes      text not null default '',
   image_url         text,
@@ -137,6 +134,14 @@ create table if not exists public.orders (
   delivery_address     text,
   notes                text,
   items_json           jsonb not null check (jsonb_typeof(items_json) = 'array' and jsonb_array_length(items_json) > 0),
+  subtotal_amount      integer not null default 0 check (subtotal_amount >= 0),
+  addons_json          jsonb not null default '[]'::jsonb,
+  addons_total         integer not null default 0 check (addons_total >= 0),
+  delivery_zone_id     uuid,
+  delivery_zone_name   text,
+  shipping_fee         integer not null default 0 check (shipping_fee >= 0),
+  voucher_code         text,
+  discount_amount      integer not null default 0 check (discount_amount >= 0),
   total_amount         integer not null check (total_amount >= 0),
   payment_method       text not null default 'ambil_di_tempat' constraint orders_payment_method_chk check (payment_method in ('dana', 'cod', 'ambil_di_tempat')),
   payment_status       text not null default 'unpaid' constraint orders_payment_status_chk check (payment_status in ('unpaid', 'waiting_verification', 'paid', 'rejected')),
@@ -272,7 +277,64 @@ revoke all on function public.adjust_product_stock(uuid, text, integer) from pub
 grant execute on function public.adjust_product_stock(uuid, text, integer) to authenticated;
 
 -- -----------------------------------------------------------------------------
--- V2 Public safe order RPCs & Atomic Admin Approval RPC
+-- V3 Custom Options, Delivery Zones & Promo Vouchers
+-- -----------------------------------------------------------------------------
+create table if not exists public.custom_options (
+  id                uuid primary key default gen_random_uuid(),
+  option_type       text not null check (option_type in ('packing', 'preparation', 'butir_grade', 'checkout_addon', 'category')),
+  code              text not null check (code ~ '^[a-z0-9]+(?:-[a-z0-9]+)*$'),
+  name              text not null check (char_length(name) between 1 and 100),
+  description       text not null default '',
+  applies_to        text not null default 'both' check (applies_to in ('butir', 'gram', 'both', 'order')),
+  extra_price       integer not null default 0 check (extra_price >= 0),
+  price_multiplier  numeric(5,2) not null default 1.00 check (price_multiplier > 0),
+  weight_label      text,
+  badge             text,
+  is_default        boolean not null default false,
+  is_active         boolean not null default true,
+  sort_order        integer not null default 0,
+  created_at        timestamptz not null default now(),
+  unique (option_type, code)
+);
+
+create index if not exists idx_custom_options_lookup
+  on public.custom_options (option_type, is_active, sort_order);
+
+create table if not exists public.delivery_zones (
+  id              uuid primary key default gen_random_uuid(),
+  name            text not null check (char_length(name) between 2 and 100),
+  description     text not null default '',
+  shipping_fee    integer not null default 0 check (shipping_fee >= 0),
+  estimated_time  text not null default '',
+  allow_cod       boolean not null default true,
+  is_active       boolean not null default true,
+  sort_order      integer not null default 0,
+  created_at      timestamptz not null default now()
+);
+
+create index if not exists idx_delivery_zones_active
+  on public.delivery_zones (is_active, sort_order);
+
+create table if not exists public.promo_vouchers (
+  id              uuid primary key default gen_random_uuid(),
+  code            text not null unique check (code ~ '^[A-Z0-9_-]{3,32}$'),
+  description     text not null default '',
+  discount_type   text not null check (discount_type in ('percent', 'fixed')),
+  discount_value  integer not null check (discount_value > 0),
+  max_discount    integer check (max_discount is null or max_discount > 0),
+  min_subtotal    integer not null default 0 check (min_subtotal >= 0),
+  usage_limit     integer check (usage_limit is null or usage_limit >= 1),
+  used_count      integer not null default 0 check (used_count >= 0),
+  is_active       boolean not null default true,
+  expires_at      timestamptz,
+  created_at      timestamptz not null default now()
+);
+
+create index if not exists idx_promo_vouchers_code
+  on public.promo_vouchers (code, is_active);
+
+-- -----------------------------------------------------------------------------
+-- V2/V3 Public safe order RPCs & Atomic Admin Approval RPC
 -- -----------------------------------------------------------------------------
 create or replace function public.format_public_order(p_order public.orders)
 returns jsonb
@@ -291,12 +353,37 @@ as $$
     'status', p_order.status,
     'admin_note', p_order.admin_note,
     'items_json', p_order.items_json,
+    'subtotal_amount', p_order.subtotal_amount,
+    'addons_json', p_order.addons_json,
+    'addons_total', p_order.addons_total,
+    'delivery_zone_name', p_order.delivery_zone_name,
+    'shipping_fee', p_order.shipping_fee,
+    'voucher_code', p_order.voucher_code,
+    'discount_amount', p_order.discount_amount,
     'total_amount', p_order.total_amount,
     'status_history_json', p_order.status_history_json,
     'approved_at', p_order.approved_at,
     'created_at', p_order.created_at
   );
 $$;
+
+create or replace function public.increment_voucher_usage(p_code text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  update public.promo_vouchers
+  set used_count = used_count + 1
+  where code = upper(trim(p_code))
+    and is_active = true
+    and (usage_limit is null or used_count < usage_limit);
+end;
+$$;
+
+revoke all on function public.increment_voucher_usage(text) from public;
+grant execute on function public.increment_voucher_usage(text) to anon, authenticated;
 
 create or replace function public.get_public_order(p_order_code text)
 returns jsonb
@@ -557,6 +644,9 @@ alter table public.store_settings enable row level security;
 alter table public.products       enable row level security;
 alter table public.orders         enable row level security;
 alter table public.testimonials   enable row level security;
+alter table public.custom_options enable row level security;
+alter table public.delivery_zones enable row level security;
+alter table public.promo_vouchers enable row level security;
 
 drop policy if exists "settings_public_read" on public.store_settings;
 create policy "settings_public_read" on public.store_settings
@@ -596,10 +686,34 @@ drop policy if exists "testimonials_admin_all" on public.testimonials;
 create policy "testimonials_admin_all" on public.testimonials
   for all to authenticated using (true) with check (true);
 
+drop policy if exists "custom_options_public_read" on public.custom_options;
+create policy "custom_options_public_read" on public.custom_options
+  for select to anon using (is_active = true);
+
+drop policy if exists "custom_options_admin_all" on public.custom_options;
+create policy "custom_options_admin_all" on public.custom_options
+  for all to authenticated using (true) with check (true);
+
+drop policy if exists "delivery_zones_public_read" on public.delivery_zones;
+create policy "delivery_zones_public_read" on public.delivery_zones
+  for select to anon using (is_active = true);
+
+drop policy if exists "delivery_zones_admin_all" on public.delivery_zones;
+create policy "delivery_zones_admin_all" on public.delivery_zones
+  for all to authenticated using (true) with check (true);
+
+drop policy if exists "promo_vouchers_public_read" on public.promo_vouchers;
+create policy "promo_vouchers_public_read" on public.promo_vouchers
+  for select to anon using (is_active = true);
+
+drop policy if exists "promo_vouchers_admin_all" on public.promo_vouchers;
+create policy "promo_vouchers_admin_all" on public.promo_vouchers
+  for all to authenticated using (true) with check (true);
+
 grant usage on schema public to anon, authenticated;
-grant select on public.store_settings, public.products, public.testimonials to anon;
+grant select on public.store_settings, public.products, public.testimonials, public.custom_options, public.delivery_zones, public.promo_vouchers to anon;
 grant insert on public.orders to anon;
-grant all on public.store_settings, public.products, public.orders, public.testimonials to authenticated;
+grant all on public.store_settings, public.products, public.orders, public.testimonials, public.custom_options, public.delivery_zones, public.promo_vouchers to authenticated;
 
 -- -----------------------------------------------------------------------------
 -- Storage: product-images, site-assets, payment-proofs

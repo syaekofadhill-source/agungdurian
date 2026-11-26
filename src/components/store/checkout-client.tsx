@@ -9,25 +9,28 @@ import {
   PackageCheck,
   ShieldCheck,
   ShoppingBag,
+  Sparkles,
+  Tag,
   Truck,
   Upload,
   Wallet,
+  X,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import { RollingNumber } from "@/components/motion/rolling-number";
 import { ProductImage } from "@/components/store/product-image";
 import { Button } from "@/components/ui/button";
 import { Field, FieldError, Input, Textarea } from "@/components/ui/field";
-import { submitCheckout } from "@/lib/actions/checkout";
+import { submitCheckout, validateVoucherAction } from "@/lib/actions/checkout";
 import { BUTIR_PREPARATION_LABEL, DELIVERY_METHOD_META, GRAM_PACKAGING_META } from "@/lib/constants";
 import { getButirSize } from "@/lib/pricing";
 import { cn, formatGram, formatRupiah } from "@/lib/utils";
 import { selectCartCount, selectCartTotal, useCartStore } from "@/stores/cart";
-import type { DeliveryMethod, PaymentMethod, StoreSettings } from "@/types/database";
+import type { CustomOption, DeliveryMethod, DeliveryZone, PaymentMethod, StoreSettings } from "@/types/database";
 
 function getInitialPayment(settings: StoreSettings): PaymentMethod {
   if (settings.payment_pickup_enabled) return "ambil_di_tempat";
@@ -36,12 +39,18 @@ function getInitialPayment(settings: StoreSettings): PaymentMethod {
   return "dana";
 }
 
-export function CheckoutClient({ settings }: { settings: StoreSettings }) {
+interface CheckoutClientProps {
+  settings: StoreSettings;
+  deliveryZones: DeliveryZone[];
+  addons: CustomOption[];
+}
+
+export function CheckoutClient({ settings, deliveryZones, addons }: CheckoutClientProps) {
   const router = useRouter();
   const lines = useCartStore((s) => s.lines);
   const clear = useCartStore((s) => s.clear);
   const count = useCartStore(selectCartCount);
-  const total = useCartStore(selectCartTotal);
+  const productSubtotal = useCartStore(selectCartTotal);
 
   useEffect(() => {
     void useCartStore.persist.rehydrate();
@@ -50,9 +59,20 @@ export function CheckoutClient({ settings }: { settings: StoreSettings }) {
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [deliveryMethod, setDeliveryMethod] = useState<DeliveryMethod>("pickup");
+  const [selectedZoneId, setSelectedZoneId] = useState<string>(() => deliveryZones[0]?.id ?? "");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(() => getInitialPayment(settings));
   const [deliveryAddress, setDeliveryAddress] = useState("");
   const [notes, setNotes] = useState("");
+
+  const [selectedAddonIds, setSelectedAddonIds] = useState<string[]>([]);
+  const [voucherInput, setVoucherInput] = useState("");
+  const [appliedVoucher, setAppliedVoucher] = useState<{
+    code: string;
+    discountAmount: number;
+    description: string;
+  } | null>(null);
+  const [voucherError, setVoucherError] = useState<string | null>(null);
+  const [voucherPending, startVoucherTransition] = useTransition();
 
   const [proofFile, setProofFile] = useState<File | null>(null);
   const [proofPreview, setProofPreview] = useState<string | null>(null);
@@ -68,24 +88,94 @@ export function CheckoutClient({ settings }: { settings: StoreSettings }) {
     };
   }, [proofPreview]);
 
+  const activeZone = useMemo(
+    () => (deliveryMethod !== "pickup" ? deliveryZones.find((z) => z.id === selectedZoneId) ?? null : null),
+    [deliveryMethod, deliveryZones, selectedZoneId],
+  );
+
+  const codAllowedForZone = deliveryMethod !== "pickup" && activeZone ? activeZone.allow_cod : true;
+
+  const addonsTotal = useMemo(
+    () =>
+      selectedAddonIds.reduce((sum, id) => {
+        const found = addons.find((a) => a.id === id);
+        return sum + (found ? found.extra_price : 0);
+      }, 0),
+    [addons, selectedAddonIds],
+  );
+
+  const shippingFee = activeZone ? activeZone.shipping_fee : 0;
+  const discountAmount = appliedVoucher ? Math.min(appliedVoucher.discountAmount, productSubtotal + addonsTotal) : 0;
+  const grandTotal = Math.max(0, productSubtotal + addonsTotal + shippingFee - discountAmount);
+
   function handleDeliverySelect(next: DeliveryMethod) {
     setDeliveryMethod(next);
-    if (next === "pickup" && paymentMethod === "cod") {
-      setPaymentMethod(settings.payment_pickup_enabled ? "ambil_di_tempat" : "dana");
-    } else if (next === "local_delivery" && paymentMethod === "ambil_di_tempat") {
-      setPaymentMethod(settings.payment_cod_enabled ? "cod" : "dana");
+    if (next === "pickup") {
+      if (paymentMethod === "cod") {
+        setPaymentMethod(settings.payment_pickup_enabled ? "ambil_di_tempat" : "dana");
+      }
+      return;
+    }
+
+    const nextZone = deliveryZones.find((z) => z.id === selectedZoneId) ?? deliveryZones[0] ?? null;
+    if (nextZone && !selectedZoneId) {
+      setSelectedZoneId(nextZone.id);
+    }
+
+    if (next === "local_delivery" && paymentMethod === "ambil_di_tempat") {
+      const canCod = settings.payment_cod_enabled && (nextZone ? nextZone.allow_cod : true);
+      setPaymentMethod(canCod ? "cod" : "dana");
     } else if (next === "shipping_vacuum" && paymentMethod !== "dana") {
       if (settings.payment_dana_enabled) setPaymentMethod("dana");
+    } else if (nextZone && !nextZone.allow_cod && paymentMethod === "cod") {
+      setPaymentMethod(settings.payment_dana_enabled ? "dana" : "ambil_di_tempat");
+    }
+  }
+
+  function handleZoneSelect(zone: DeliveryZone) {
+    setSelectedZoneId(zone.id);
+    if (!zone.allow_cod && paymentMethod === "cod") {
+      setPaymentMethod(settings.payment_dana_enabled ? "dana" : "ambil_di_tempat");
+      toast.info(`Zona ${zone.name} hanya mendukung pembayaran non-COD.`);
     }
   }
 
   function handlePaymentSelect(next: PaymentMethod) {
+    if (next === "cod" && !codAllowedForZone) {
+      toast.error("COD tidak tersedia untuk zona pengiriman yang dipilih.");
+      return;
+    }
     setPaymentMethod(next);
     if (next === "ambil_di_tempat" && deliveryMethod !== "pickup") {
       setDeliveryMethod("pickup");
     } else if (next === "cod" && deliveryMethod === "pickup") {
       setDeliveryMethod("local_delivery");
     }
+  }
+
+  function toggleAddon(id: string) {
+    setSelectedAddonIds((prev) => (prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]));
+  }
+
+  function handleApplyVoucher() {
+    setVoucherError(null);
+    const trimmed = voucherInput.trim().toUpperCase();
+    if (!trimmed) {
+      setVoucherError("Masukkan kode voucher terlebih dahulu.");
+      return;
+    }
+    startVoucherTransition(async () => {
+      const res = await validateVoucherAction(trimmed, productSubtotal);
+      if (!res.ok || !res.data) {
+        const msg = res.ok ? "Voucher tidak valid." : res.error;
+        setVoucherError(msg);
+        setAppliedVoucher(null);
+        return;
+      }
+      setAppliedVoucher(res.data);
+      setVoucherInput(res.data.code);
+      toast.success(`Voucher ${res.data.code} diterapkan!`);
+    });
   }
 
   function handleProofPick(e: React.ChangeEvent<HTMLInputElement>) {
@@ -126,9 +216,12 @@ export function CheckoutClient({ settings }: { settings: StoreSettings }) {
         customerName,
         customerPhone,
         deliveryMethod,
+        deliveryZoneId: deliveryMethod !== "pickup" && selectedZoneId ? selectedZoneId : null,
         paymentMethod,
         deliveryAddress,
         notes,
+        addonIds: selectedAddonIds,
+        voucherCode: appliedVoucher?.code ?? "",
         items: lines.map((l) =>
           l.mode === "butir"
             ? {
@@ -136,6 +229,9 @@ export function CheckoutClient({ settings }: { settings: StoreSettings }) {
                 productId: l.productId,
                 size: l.size,
                 preparation: l.preparation,
+                gradeId: l.gradeId,
+                preparationId: l.preparationId,
+                packingId: l.packingId,
                 quantity: l.quantity,
               }
             : {
@@ -143,6 +239,7 @@ export function CheckoutClient({ settings }: { settings: StoreSettings }) {
                 productId: l.productId,
                 grams: l.grams,
                 packaging: l.packaging,
+                packingId: l.packingId,
                 quantity: l.quantity,
               },
         ),
@@ -305,6 +402,45 @@ export function CheckoutClient({ settings }: { settings: StoreSettings }) {
             </div>
             <FieldError messages={fieldErrors.deliveryMethod} />
 
+            {deliveryMethod !== "pickup" && deliveryZones.length > 0 ? (
+              <div className="space-y-2.5 pt-1">
+                <p className="text-xs font-semibold uppercase tracking-wider text-moss">Pilih Zona Ongkir</p>
+                <div className="grid gap-2.5 sm:grid-cols-2">
+                  {deliveryZones.map((zone) => {
+                    const selected = selectedZoneId === zone.id;
+                    return (
+                      <button
+                        key={zone.id}
+                        type="button"
+                        onClick={() => handleZoneSelect(zone)}
+                        className={cn(
+                          "flex flex-col justify-between rounded-2xl border p-3.5 text-left transition",
+                          selected
+                            ? "border-gold bg-custard/45 ring-1 ring-gold"
+                            : "border-orchard/12 bg-cream/50 hover:border-orchard/30",
+                        )}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <span className="text-sm font-bold text-orchard">{zone.name}</span>
+                          <span className="font-mono text-xs font-bold text-orchard tabular">
+                            {zone.shipping_fee === 0 ? "Gratis" : formatRupiah(zone.shipping_fee)}
+                          </span>
+                        </div>
+                        <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[11px] text-moss">
+                          {zone.estimated_time ? <span>{zone.estimated_time}</span> : null}
+                          {!zone.allow_cod ? (
+                            <span className="rounded-full bg-orchard/10 px-2 py-0.5 font-semibold text-orchard">
+                              Non-COD
+                            </span>
+                          ) : null}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
+
             {needsAddress ? (
               <Field label="Alamat Pengiriman Lengkap" htmlFor="chk-addr" error={fieldErrors.deliveryAddress}>
                 <Textarea
@@ -335,6 +471,53 @@ export function CheckoutClient({ settings }: { settings: StoreSettings }) {
               />
             </Field>
           </section>
+
+          {addons.length > 0 ? (
+            <section className="space-y-4 rounded-3xl border border-orchard/10 bg-white/85 p-6 shadow-soft">
+              <div className="flex items-center gap-2">
+                <Sparkles className="size-4 text-gold-hover" />
+                <h2 className="font-display text-xl font-bold text-orchard">Tambahan &amp; Layanan Opsional</h2>
+              </div>
+              <div className="grid gap-2.5 sm:grid-cols-2">
+                {addons.map((addon) => {
+                  const checked = selectedAddonIds.includes(addon.id);
+                  return (
+                    <button
+                      key={addon.id}
+                      type="button"
+                      onClick={() => toggleAddon(addon.id)}
+                      className={cn(
+                        "flex items-start gap-3 rounded-2xl border p-3.5 text-left transition",
+                        checked
+                          ? "border-gold bg-custard/45 ring-1 ring-gold"
+                          : "border-orchard/12 bg-cream/50 hover:border-orchard/30",
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          "mt-0.5 grid size-5 shrink-0 place-items-center rounded-md border",
+                          checked ? "border-orchard bg-orchard text-gold" : "border-orchard/30 bg-white",
+                        )}
+                      >
+                        {checked ? <Check className="size-3.5" /> : null}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-sm font-bold text-orchard">{addon.name}</span>
+                          <span className="font-mono text-xs font-bold text-orchard tabular">
+                            +{formatRupiah(addon.extra_price)}
+                          </span>
+                        </div>
+                        {addon.description ? (
+                          <p className="mt-0.5 text-xs text-moss">{addon.description}</p>
+                        ) : null}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+          ) : null}
 
           <section className="space-y-4 rounded-3xl border border-orchard/10 bg-white/85 p-6 shadow-soft">
             <div className="flex items-center justify-between gap-2">
@@ -454,12 +637,15 @@ export function CheckoutClient({ settings }: { settings: StoreSettings }) {
               {settings.payment_cod_enabled ? (
                 <button
                   type="button"
+                  disabled={!codAllowedForZone}
                   onClick={() => handlePaymentSelect("cod")}
                   className={cn(
                     "flex items-center justify-between rounded-2xl border p-4 text-left transition",
-                    paymentMethod === "cod"
-                      ? "border-gold bg-custard/35 ring-1 ring-gold"
-                      : "border-orchard/12 bg-cream/50 hover:border-orchard/30",
+                    !codAllowedForZone
+                      ? "cursor-not-allowed border-orchard/10 bg-cream/30 opacity-60"
+                      : paymentMethod === "cod"
+                        ? "border-gold bg-custard/35 ring-1 ring-gold"
+                        : "border-orchard/12 bg-cream/50 hover:border-orchard/30",
                   )}
                 >
                   <div className="flex items-center gap-3 pr-4">
@@ -468,7 +654,11 @@ export function CheckoutClient({ settings }: { settings: StoreSettings }) {
                     </span>
                     <div>
                       <p className="text-sm font-bold text-orchard">COD (Bayar di Tempat saat Kurir Tiba)</p>
-                      <p className="text-xs text-moss">{settings.payment_cod_notes}</p>
+                      <p className="text-xs text-moss">
+                        {codAllowedForZone
+                          ? settings.payment_cod_notes
+                          : "COD tidak tersedia untuk zona pengiriman yang dipilih."}
+                      </p>
                     </div>
                   </div>
                   <span
@@ -526,8 +716,8 @@ export function CheckoutClient({ settings }: { settings: StoreSettings }) {
                     <p className="truncate font-display text-sm font-bold text-orchard">{line.name}</p>
                     <p className="text-xs text-moss">
                       {line.mode === "butir"
-                        ? `${line.quantity}× ${getButirSize(line.size).label} · ${BUTIR_PREPARATION_LABEL[line.preparation]}`
-                        : `${line.quantity}× ${formatGram(line.grams)} · ${GRAM_PACKAGING_META[line.packaging].label}`}
+                        ? `${line.quantity}× ${line.gradeName ?? getButirSize(line.size).label} · ${line.preparationName ?? BUTIR_PREPARATION_LABEL[line.preparation] ?? line.preparation}${line.packingName ? ` · ${line.packingName}` : ""}`
+                        : `${line.quantity}× ${formatGram(line.grams)} · ${line.packingName ?? GRAM_PACKAGING_META[line.packaging]?.label ?? line.packaging}`}
                     </p>
                   </div>
                   <span className="font-mono text-sm font-bold text-orchard tabular">
@@ -537,14 +727,82 @@ export function CheckoutClient({ settings }: { settings: StoreSettings }) {
               ))}
             </ul>
 
-            <div className="mt-4 space-y-2 border-t border-orchard/10 pt-4">
-              <div className="flex items-baseline justify-between">
-                <span className="text-sm font-medium text-moss">Subtotal Pesanan</span>
-                <RollingNumber value={total} prefix="Rp" className="text-2xl font-bold text-orchard" />
+            <div className="mt-4 border-t border-orchard/10 pt-4">
+              <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-orchard">
+                <Tag className="size-3.5 text-gold-hover" />
+                Kode Promo / Voucher
+              </p>
+              {appliedVoucher ? (
+                <div className="flex items-center justify-between gap-2 rounded-2xl border border-orchard/15 bg-custard/45 px-3.5 py-2.5 text-xs">
+                  <div>
+                    <span className="font-mono font-bold text-orchard">{appliedVoucher.code}</span>
+                    <p className="text-[11px] text-moss">{appliedVoucher.description}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAppliedVoucher(null);
+                      setVoucherInput("");
+                      setVoucherError(null);
+                    }}
+                    className="rounded-full p-1 text-moss hover:bg-white hover:text-crimson"
+                    aria-label="Hapus voucher"
+                  >
+                    <X className="size-4" />
+                  </button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <Input
+                    value={voucherInput}
+                    onChange={(e) => setVoucherInput(e.target.value.toUpperCase())}
+                    placeholder="Contoh: PANEN10"
+                    className="h-10 font-mono text-xs uppercase"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-10 shrink-0 px-4"
+                    disabled={voucherPending}
+                    onClick={handleApplyVoucher}
+                  >
+                    {voucherPending ? "Cek…" : "Terapkan"}
+                  </Button>
+                </div>
+              )}
+              {voucherError ? <p className="mt-1.5 text-xs font-medium text-crimson">{voucherError}</p> : null}
+            </div>
+
+            <div className="mt-4 space-y-2 border-t border-orchard/10 pt-4 text-sm">
+              <div className="flex items-center justify-between text-moss">
+                <span>Subtotal Produk</span>
+                <span className="font-mono font-semibold text-orchard tabular">{formatRupiah(productSubtotal)}</span>
               </div>
-              {deliveryMethod !== "pickup" ? (
-                <p className="text-xs text-moss">Ongkir antar/ekspedisi vacuum dikonfirmasi admin saat approval.</p>
+              {addonsTotal > 0 ? (
+                <div className="flex items-center justify-between text-moss">
+                  <span>Add-on Tambahan ({selectedAddonIds.length})</span>
+                  <span className="font-mono font-semibold text-orchard tabular">+{formatRupiah(addonsTotal)}</span>
+                </div>
               ) : null}
+              {deliveryMethod !== "pickup" && activeZone ? (
+                <div className="flex items-center justify-between text-moss">
+                  <span>Ongkir ({activeZone.name})</span>
+                  <span className="font-mono font-semibold text-orchard tabular">
+                    {shippingFee === 0 ? "Gratis" : `+${formatRupiah(shippingFee)}`}
+                  </span>
+                </div>
+              ) : null}
+              {discountAmount > 0 && appliedVoucher ? (
+                <div className="flex items-center justify-between text-emerald-800">
+                  <span>Diskon ({appliedVoucher.code})</span>
+                  <span className="font-mono font-semibold tabular">-{formatRupiah(discountAmount)}</span>
+                </div>
+              ) : null}
+              <div className="flex items-baseline justify-between border-t border-orchard/10 pt-2.5">
+                <span className="text-sm font-bold text-orchard">Total Bayar</span>
+                <RollingNumber value={grandTotal} prefix="Rp" className="text-2xl font-bold text-orchard" />
+              </div>
             </div>
 
             <Button type="submit" variant="gold" size="lg" className="mt-5 w-full" disabled={pending}>

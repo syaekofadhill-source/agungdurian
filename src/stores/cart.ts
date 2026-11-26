@@ -17,8 +17,30 @@ type CartBase = {
 };
 
 export type CartLine =
-  | (CartBase & { mode: "butir"; size: ButirSize; preparation: ButirPreparation; maxQuantity: number })
-  | (CartBase & { mode: "gram"; grams: number; packaging: GramPackaging; maxQuantity: number });
+  | (CartBase & {
+      mode: "butir";
+      size: ButirSize;
+      preparation: ButirPreparation;
+      gradeId?: string | null;
+      gradeName?: string | null;
+      gradeMultiplier?: number;
+      preparationId?: string | null;
+      preparationName?: string | null;
+      preparationPrice?: number;
+      packingId?: string | null;
+      packingName?: string | null;
+      packingPrice?: number;
+      maxQuantity: number;
+    })
+  | (CartBase & {
+      mode: "gram";
+      grams: number;
+      packaging: GramPackaging;
+      packingId?: string | null;
+      packingName?: string | null;
+      packingPrice?: number;
+      maxQuantity: number;
+    });
 
 export type NewCartLine =
   | (Omit<Extract<CartLine, { mode: "butir" }>, "key" | "quantity"> & { quantity?: number })
@@ -26,8 +48,8 @@ export type NewCartLine =
 
 function lineKey(line: NewCartLine): string {
   return line.mode === "butir"
-    ? `${line.productId}:butir:${line.size}:${line.preparation}`
-    : `${line.productId}:gram:${line.grams}:${line.packaging}`;
+    ? `${line.productId}:butir:${line.gradeId ?? line.size}:${line.preparationId ?? line.preparation}:${line.packingId ?? "std"}`
+    : `${line.productId}:gram:${line.grams}:${line.packingId ?? line.packaging}`;
 }
 
 function createCartLine(incoming: NewCartLine, key: string): CartLine {
@@ -43,6 +65,15 @@ function createCartLine(incoming: NewCartLine, key: string): CartLine {
       unitPrice: incoming.unitPrice,
       size: incoming.size,
       preparation: incoming.preparation,
+      gradeId: incoming.gradeId ?? null,
+      gradeName: incoming.gradeName ?? null,
+      gradeMultiplier: incoming.gradeMultiplier ?? 1,
+      preparationId: incoming.preparationId ?? null,
+      preparationName: incoming.preparationName ?? null,
+      preparationPrice: incoming.preparationPrice ?? 0,
+      packingId: incoming.packingId ?? null,
+      packingName: incoming.packingName ?? null,
+      packingPrice: incoming.packingPrice ?? 0,
       maxQuantity: incoming.maxQuantity,
       quantity,
     };
@@ -57,6 +88,9 @@ function createCartLine(incoming: NewCartLine, key: string): CartLine {
     unitPrice: incoming.unitPrice,
     grams: incoming.grams,
     packaging: incoming.packaging,
+    packingId: incoming.packingId ?? null,
+    packingName: incoming.packingName ?? null,
+    packingPrice: incoming.packingPrice ?? 0,
     maxQuantity: incoming.maxQuantity,
     quantity,
   };
@@ -65,7 +99,6 @@ function createCartLine(incoming: NewCartLine, key: string): CartLine {
 type CartState = {
   lines: CartLine[];
   isOpen: boolean;
-  /** Increments on every add — drives the header badge bounce animation. */
   bump: number;
   addLine: (line: NewCartLine) => void;
   setQuantity: (key: string, quantity: number) => void;
@@ -110,7 +143,7 @@ export const useCartStore = create<CartState>()(
     }),
     {
       name: "agungdurian-cart-v1",
-      version: 1,
+      version: 2,
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({ lines: state.lines }),
       skipHydration: true,

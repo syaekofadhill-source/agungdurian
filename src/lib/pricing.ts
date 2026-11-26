@@ -1,5 +1,5 @@
 import { BUTIR_SIZES, GRAM_PACKAGING_META } from "@/lib/constants";
-import type { ButirSize, GramPackaging, Product } from "@/types/database";
+import type { ButirSize, CustomOption, GramPackaging, Product, PromoVoucher } from "@/types/database";
 
 /**
  * Single source of truth for pricing — used by the client configurator for
@@ -9,18 +9,33 @@ import type { ButirSize, GramPackaging, Product } from "@/types/database";
 
 export function getButirSize(size: ButirSize) {
   const found = BUTIR_SIZES.find((s) => s.id === size);
-  if (!found) throw new Error(`Ukuran tidak dikenal: ${size}`);
-  return found;
+  if (found) return found;
+  return { id: size, label: size, weightFactor: 1, priceMultiplier: 1 };
 }
 
-export function butirUnitPrice(product: Pick<Product, "price_butir">, size: ButirSize): number {
-  const { priceMultiplier } = getButirSize(size);
-  // round to the nearest Rp 1.000 for clean price tags
-  return Math.round((product.price_butir * priceMultiplier) / 1000) * 1000;
+export function butirBasePrice(
+  product: Pick<Product, "price_butir">,
+  gradeOrSize: Pick<CustomOption, "price_multiplier"> | ButirSize,
+): number {
+  const mult =
+    typeof gradeOrSize === "string"
+      ? getButirSize(gradeOrSize).priceMultiplier
+      : Number(gradeOrSize.price_multiplier || 1);
+  return Math.round((product.price_butir * mult) / 1000) * 1000;
 }
 
-export function butirWeightKg(product: Pick<Product, "avg_weight_kg">, size: ButirSize): number {
-  return Math.round(product.avg_weight_kg * getButirSize(size).weightFactor * 10) / 10;
+export function butirUnitPrice(
+  product: Pick<Product, "price_butir">,
+  size: ButirSize | Pick<CustomOption, "price_multiplier">,
+  prepExtra = 0,
+  packingExtra = 0,
+): number {
+  return butirBasePrice(product, size) + prepExtra + packingExtra;
+}
+
+export function butirWeightKg(product: Pick<Product, "avg_weight_kg">, size: ButirSize | number): number {
+  const factor = typeof size === "number" ? size : getButirSize(size).weightFactor;
+  return Math.round(product.avg_weight_kg * factor * 10) / 10;
 }
 
 export function gramBasePrice(product: Pick<Product, "price_per_100g">, grams: number): number {
@@ -30,9 +45,10 @@ export function gramBasePrice(product: Pick<Product, "price_per_100g">, grams: n
 export function gramUnitPrice(
   product: Pick<Product, "price_per_100g">,
   grams: number,
-  packaging: GramPackaging,
+  packaging: GramPackaging | number,
 ): number {
-  return gramBasePrice(product, grams) + GRAM_PACKAGING_META[packaging].surcharge;
+  const surcharge = typeof packaging === "number" ? packaging : (GRAM_PACKAGING_META[packaging]?.surcharge ?? 0);
+  return gramBasePrice(product, grams) + surcharge;
 }
 
 export function clampGrams(product: Pick<Product, "min_gram" | "max_gram" | "stock_gram">, grams: number): number {
@@ -43,7 +59,7 @@ export function clampGrams(product: Pick<Product, "min_gram" | "max_gram" | "sto
 /** Lowest price a shopper can pay for this product — used for "Mulai Rp…" labels and JSON-LD offers. */
 export function startingPrice(product: Product): number {
   const candidates: number[] = [];
-  if (product.allow_butir && product.price_butir > 0) candidates.push(butirUnitPrice(product, "sedang"));
+  if (product.allow_butir && product.price_butir > 0) candidates.push(butirBasePrice(product, "sedang"));
   if (product.allow_gram && product.price_per_100g > 0) candidates.push(gramBasePrice(product, product.min_gram));
   return candidates.length ? Math.min(...candidates) : 0;
 }
@@ -52,4 +68,17 @@ export function isSoldOut(product: Product): boolean {
   const butirAvailable = product.allow_butir && product.stock_butir > 0;
   const gramAvailable = product.allow_gram && product.stock_gram >= product.min_gram;
   return !butirAvailable && !gramAvailable;
+}
+
+export function computeVoucherDiscount(
+  voucher: Pick<PromoVoucher, "discount_type" | "discount_value" | "max_discount">,
+  subtotal: number,
+): number {
+  if (subtotal <= 0) return 0;
+  if (voucher.discount_type === "fixed") {
+    return Math.min(subtotal, voucher.discount_value);
+  }
+  const raw = Math.round((subtotal * voucher.discount_value) / 100);
+  const capped = voucher.max_discount ? Math.min(raw, voucher.max_discount) : raw;
+  return Math.min(subtotal, capped);
 }

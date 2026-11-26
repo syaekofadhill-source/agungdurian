@@ -12,11 +12,25 @@ import type {
   WhyItem,
 } from "@/types/database";
 
-export const CATEGORY_LABEL: Record<VarietyCategory, string> = {
+export const CATEGORY_LABEL: Record<string, string> = {
   lokal: "Lokal Sigaluh",
   premium: "Premium / Unggulan",
   kupas: "Paket Kupas / Box",
 };
+
+export function getCategoryLabel(slug: string, customCategories?: ReadonlyArray<{ code: string; name: string }>): string {
+  const fromDb = customCategories?.find((c) => c.code === slug)?.name;
+  if (fromDb) return fromDb;
+  return CATEGORY_LABEL[slug] ?? slug;
+}
+
+export const OPTION_TYPE_META = {
+  packing: { label: "Custom Packing", hint: "Kemasan tambahan untuk pembelian per butir atau per gram." },
+  preparation: { label: "Opsi Penyajian", hint: "Cara buka/kupas untuk pembelian durian per butir." },
+  butir_grade: { label: "Grade Ukuran Butir", hint: "Pilihan ukuran buah utuh dengan pengali harga." },
+  checkout_addon: { label: "Add-on Checkout", hint: "Tambahan opsional saat checkout (kartu ucapan, ice gel, dll)." },
+  category: { label: "Kategori Katalog", hint: "Kategori filter etalase & formulir produk." },
+} as const;
 
 export const CATEGORY_FILTERS: ReadonlyArray<{ value: VarietyCategory | "semua"; label: string }> = [
   { value: "semua", label: "Semua" },

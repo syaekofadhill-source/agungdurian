@@ -2,24 +2,17 @@
 
 import { motion } from "framer-motion";
 import { Check, Minus, Package, Plus, Scale, ShoppingBag } from "lucide-react";
-import { useId, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { RollingNumber } from "@/components/motion/rolling-number";
 import { Slider } from "@/components/ui/slider";
-import {
-  BUTIR_PREPARATION_LABEL,
-  BUTIR_SIZES,
-  GRAM_PACKAGING_META,
-  GRAM_PRESETS,
-  GRAM_STEP,
-  LOW_STOCK_BUTIR,
-  LOW_STOCK_GRAM,
-} from "@/lib/constants";
-import { butirUnitPrice, butirWeightKg, gramUnitPrice } from "@/lib/pricing";
+import { GRAM_STEP, LOW_STOCK_BUTIR, LOW_STOCK_GRAM } from "@/lib/constants";
+import { MOCK_CUSTOM_OPTIONS, MOCK_SETTINGS } from "@/lib/mock-data";
+import { butirBasePrice, butirWeightKg, gramBasePrice } from "@/lib/pricing";
 import { cn, formatGram, formatNumber, formatRupiah } from "@/lib/utils";
 import { useCartStore } from "@/stores/cart";
-import type { ButirPreparation, ButirSize, GramPackaging, Product, SellMode } from "@/types/database";
+import type { CustomOption, Product, SellMode } from "@/types/database";
 
 function getInitialMode(product: Product): SellMode {
   if (product.allow_butir && (product.stock_butir > 0 || !product.allow_gram)) return "butir";
@@ -46,22 +39,53 @@ function getInitialGrams(product: Product): number {
 export function DualModeConfigurator({
   product,
   variant = "compact",
+  customOptions = MOCK_CUSTOM_OPTIONS,
+  gramPresets = MOCK_SETTINGS.gram_presets_json,
   onAdded,
 }: {
   product: Product;
   variant?: "compact" | "full";
+  customOptions?: CustomOption[];
+  gramPresets?: number[];
   onAdded?: () => void;
 }) {
   const uid = useId().replace(/:/g, "");
   const addLine = useCartStore((s) => s.addLine);
   const openCart = useCartStore((s) => s.open);
 
+  const grades = useMemo(
+    () => customOptions.filter((o) => o.option_type === "butir_grade" && o.is_active),
+    [customOptions],
+  );
+  const preps = useMemo(
+    () => customOptions.filter((o) => o.option_type === "preparation" && o.is_active),
+    [customOptions],
+  );
+  const butirPackings = useMemo(
+    () => customOptions.filter((o) => o.option_type === "packing" && o.is_active && (o.applies_to === "butir" || o.applies_to === "both")),
+    [customOptions],
+  );
+  const gramPackings = useMemo(
+    () => customOptions.filter((o) => o.option_type === "packing" && o.is_active && (o.applies_to === "gram" || o.applies_to === "both")),
+    [customOptions],
+  );
+
+  const defaultGrade = grades.find((g) => g.is_default) ?? grades[0];
+  const defaultPrep = preps.find((p) => p.is_default) ?? preps[0];
+  const defaultGramPack = gramPackings.find((p) => p.is_default) ?? gramPackings[0];
+
   const [mode, setMode] = useState<SellMode>(() => getInitialMode(product));
-  const [size, setSize] = useState<ButirSize>("sedang");
-  const [preparation, setPreparation] = useState<ButirPreparation>("utuh");
+  const [selectedGradeId, setSelectedGradeId] = useState<string>(defaultGrade?.id ?? "");
+  const [selectedPrepId, setSelectedPrepId] = useState<string>(defaultPrep?.id ?? "");
+  const [selectedButirPackId, setSelectedButirPackId] = useState<string>("");
   const [grams, setGrams] = useState<number>(() => getInitialGrams(product));
-  const [packaging, setPackaging] = useState<GramPackaging>("thinwall");
+  const [selectedGramPackId, setSelectedGramPackId] = useState<string>(defaultGramPack?.id ?? "");
   const [quantity, setQuantity] = useState<number>(1);
+
+  const activeGrade = grades.find((g) => g.id === selectedGradeId) ?? defaultGrade;
+  const activePrep = preps.find((p) => p.id === selectedPrepId) ?? defaultPrep;
+  const activeButirPack = butirPackings.find((p) => p.id === selectedButirPackId) ?? null;
+  const activeGramPack = gramPackings.find((p) => p.id === selectedGramPackId) ?? defaultGramPack;
 
   const canButir = product.allow_butir;
   const canGram = product.allow_gram;
@@ -80,10 +104,21 @@ export function DualModeConfigurator({
       : Math.max(1, Math.min(20, Math.floor(product.stock_gram / clampedGrams)));
 
   const safeQty = Math.min(quantity, maxQuantity);
-  const unitPrice =
+
+  const basePrice =
     activeMode === "butir"
-      ? butirUnitPrice(product, size)
-      : gramUnitPrice(product, clampedGrams, packaging);
+      ? butirBasePrice(product, activeGrade ?? "sedang")
+      : gramBasePrice(product, clampedGrams);
+  const extraOptionFee =
+    activeMode === "butir"
+      ? (activePrep?.extra_price ?? 0) + (activeButirPack?.extra_price ?? 0)
+      : activeGramPack?.extra_price ?? 0;
+  const unitPrice = basePrice + extraOptionFee;
+
+  const presets = useMemo(
+    () => [...gramPresets].sort((a, b) => a - b),
+    [gramPresets],
+  );
 
   function handleModeChange(next: SellMode) {
     setMode(next);
@@ -94,6 +129,9 @@ export function DualModeConfigurator({
     if (!isAvailable) return;
 
     if (activeMode === "butir") {
+      const sizeCode = activeGrade?.code ?? "sedang";
+      const prepCode = activePrep?.code ?? "utuh";
+      const packName = activeButirPack?.name ?? null;
       addLine({
         mode: "butir",
         productId: product.id,
@@ -101,16 +139,27 @@ export function DualModeConfigurator({
         name: product.name,
         imageUrl: product.image_url,
         unitPrice,
-        size,
-        preparation,
+        size: sizeCode,
+        preparation: prepCode,
+        gradeId: activeGrade?.id ?? null,
+        gradeName: activeGrade?.name ?? sizeCode,
+        gradeMultiplier: activeGrade?.price_multiplier ?? 1,
+        preparationId: activePrep?.id ?? null,
+        preparationName: activePrep?.name ?? prepCode,
+        preparationPrice: activePrep?.extra_price ?? 0,
+        packingId: activeButirPack?.id ?? null,
+        packingName: packName,
+        packingPrice: activeButirPack?.extra_price ?? 0,
         maxQuantity: product.stock_butir,
         quantity: safeQty,
       });
       toast.success(`${product.name} masuk keranjang`, {
-        description: `${safeQty} butir (${size}, ${BUTIR_PREPARATION_LABEL[preparation]})`,
+        description: `${safeQty} butir (${activeGrade?.name ?? sizeCode}, ${activePrep?.name ?? prepCode}${packName ? ` · ${packName}` : ""})`,
         action: { label: "Lihat Keranjang", onClick: () => openCart() },
       });
     } else {
+      const packCode = activeGramPack?.code ?? "thinwall";
+      const packName = activeGramPack?.name ?? "Kemasan Standar";
       addLine({
         mode: "gram",
         productId: product.id,
@@ -119,12 +168,15 @@ export function DualModeConfigurator({
         imageUrl: product.image_url,
         unitPrice,
         grams: clampedGrams,
-        packaging,
+        packaging: packCode,
+        packingId: activeGramPack?.id ?? null,
+        packingName: packName,
+        packingPrice: activeGramPack?.extra_price ?? 0,
         maxQuantity,
         quantity: safeQty,
       });
       toast.success(`${product.name} masuk keranjang`, {
-        description: `${safeQty}× ${formatGram(clampedGrams)} (${GRAM_PACKAGING_META[packaging].label})`,
+        description: `${safeQty}× ${formatGram(clampedGrams)} (${packName})`,
         action: { label: "Lihat Keranjang", onClick: () => openCart() },
       });
     }
@@ -183,27 +235,23 @@ export function DualModeConfigurator({
             <span
               className={cn(
                 "font-mono font-semibold tabular",
-                product.stock_butir === 0
-                  ? "text-crimson"
-                  : product.stock_butir <= LOW_STOCK_BUTIR
-                    ? "text-crimson"
-                    : "text-orchard",
+                product.stock_butir === 0 || product.stock_butir <= LOW_STOCK_BUTIR ? "text-crimson" : "text-orchard",
               )}
             >
               {product.stock_butir > 0 ? `Tersedia ${product.stock_butir} butir` : "Stok butir habis"}
             </span>
           </div>
 
-          <div className="grid grid-cols-3 gap-1.5">
-            {BUTIR_SIZES.map((opt) => {
-              const selected = size === opt.id;
-              const price = butirUnitPrice(product, opt.id);
-              const weight = butirWeightKg(product, opt.id);
+          <div className={cn("grid gap-1.5", grades.length <= 3 ? "grid-cols-3" : "grid-cols-2 sm:grid-cols-3")}>
+            {grades.map((opt) => {
+              const selected = activeGrade?.id === opt.id;
+              const price = butirBasePrice(product, opt);
+              const weight = butirWeightKg(product, opt.price_multiplier);
               return (
                 <button
                   key={opt.id}
                   type="button"
-                  onClick={() => setSize(opt.id)}
+                  onClick={() => setSelectedGradeId(opt.id)}
                   className={cn(
                     "rounded-xl border px-2 py-2 text-left transition",
                     selected
@@ -211,9 +259,9 @@ export function DualModeConfigurator({
                       : "border-orchard/10 bg-white/80 hover:border-orchard/30",
                   )}
                 >
-                  <span className="block text-[11.5px] font-bold text-bark">{opt.label}</span>
+                  <span className="block truncate text-[11.5px] font-bold text-bark">{opt.name}</span>
                   <span className="block font-mono text-[10.5px] text-moss tabular">
-                    ±{weight.toLocaleString("id-ID")} kg
+                    {opt.weight_label || `±${weight.toLocaleString("id-ID")} kg`}
                   </span>
                   {!isCompact ? (
                     <span className="mt-1 block font-mono text-[11px] font-semibold text-orchard tabular">
@@ -227,30 +275,81 @@ export function DualModeConfigurator({
 
           <div className="space-y-1.5">
             <span className="block text-[11px] font-semibold uppercase tracking-wider text-moss">Penyajian</span>
-            <div className="grid grid-cols-2 gap-1.5">
-              {(["utuh", "kupas"] as const).map((prep) => {
-                const selected = preparation === prep;
+            <div className={cn("grid gap-1.5", preps.length === 2 ? "grid-cols-2" : "grid-cols-1 sm:grid-cols-2")}>
+              {preps.map((prep) => {
+                const selected = activePrep?.id === prep.id;
                 return (
                   <button
-                    key={prep}
+                    key={prep.id}
                     type="button"
-                    onClick={() => setPreparation(prep)}
+                    onClick={() => setSelectedPrepId(prep.id)}
                     className={cn(
-                      "flex items-center justify-center gap-1 rounded-xl border px-2.5 py-2 text-[11.5px] font-semibold transition",
+                      "flex items-center justify-between gap-1.5 rounded-xl border px-2.5 py-2 text-left text-[11.5px] font-semibold transition",
                       selected
                         ? "border-orchard bg-orchard text-cream"
                         : "border-orchard/12 bg-white/80 text-bark hover:border-orchard/30",
                     )}
                   >
-                    {selected ? <Check className="size-3 shrink-0 text-gold" /> : null}
-                    <span className="truncate">
-                      {isCompact && prep === "kupas" ? "Dibukakan / Kupas" : BUTIR_PREPARATION_LABEL[prep]}
+                    <span className="flex min-w-0 items-center gap-1">
+                      {selected ? <Check className="size-3 shrink-0 text-gold" /> : null}
+                      <span className="truncate">{prep.name}</span>
                     </span>
+                    {prep.extra_price > 0 ? (
+                      <span className={cn("shrink-0 font-mono text-[10px] tabular", selected ? "text-custard" : "text-moss")}>
+                        +{formatRupiah(prep.extra_price)}
+                      </span>
+                    ) : null}
                   </button>
                 );
               })}
             </div>
           </div>
+
+          {butirPackings.length > 0 ? (
+            <div className="space-y-1.5">
+              <span className="block text-[11px] font-semibold uppercase tracking-wider text-moss">
+                Custom Packing (Opsional)
+              </span>
+              <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedButirPackId("")}
+                  className={cn(
+                    "rounded-xl border px-2.5 py-1.5 text-left text-[11px] transition",
+                    !activeButirPack
+                      ? "border-orchard bg-orchard text-cream"
+                      : "border-orchard/12 bg-white/80 text-bark hover:border-orchard/30",
+                  )}
+                >
+                  <span className="block font-semibold">Packing Standar</span>
+                  <span className={cn("block font-mono text-[10px]", !activeButirPack ? "text-custard" : "text-moss")}>
+                    Gratis
+                  </span>
+                </button>
+                {butirPackings.map((pack) => {
+                  const selected = activeButirPack?.id === pack.id;
+                  return (
+                    <button
+                      key={pack.id}
+                      type="button"
+                      onClick={() => setSelectedButirPackId(pack.id)}
+                      className={cn(
+                        "rounded-xl border px-2.5 py-1.5 text-left text-[11px] transition",
+                        selected
+                          ? "border-orchard bg-orchard text-cream"
+                          : "border-orchard/12 bg-white/80 text-bark hover:border-orchard/30",
+                      )}
+                    >
+                      <span className="block truncate font-semibold">{pack.name}</span>
+                      <span className={cn("block font-mono text-[10px] tabular", selected ? "text-custard" : "text-moss")}>
+                        {pack.extra_price === 0 ? "Gratis" : `+${formatRupiah(pack.extra_price)}`}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
         </div>
       ) : (
         <div className="space-y-3 rounded-2xl border border-orchard/10 bg-cream/65 p-3">
@@ -271,7 +370,7 @@ export function DualModeConfigurator({
           </div>
 
           <div className="grid grid-cols-4 gap-1.5">
-            {GRAM_PRESETS.map((preset) => {
+            {presets.map((preset) => {
               const disabled = preset < product.min_gram || preset > effectiveMaxGram || !gramInStock;
               const selected = clampedGrams === preset && !disabled;
               return (
@@ -288,7 +387,7 @@ export function DualModeConfigurator({
                     disabled && "cursor-not-allowed opacity-40 hover:border-orchard/10",
                   )}
                 >
-                  {preset >= 1000 ? "1 kg" : `${preset}g`}
+                  {preset >= 1000 && preset % 1000 === 0 ? `${preset / 1000} kg` : `${preset}g`}
                 </button>
               );
             })}
@@ -319,16 +418,17 @@ export function DualModeConfigurator({
           </div>
 
           <div className="space-y-1.5">
-            <span className="block text-[11px] font-semibold uppercase tracking-wider text-moss">Kemasan</span>
+            <span className="block text-[11px] font-semibold uppercase tracking-wider text-moss">
+              Kemasan &amp; Custom Packing
+            </span>
             <div className="grid grid-cols-2 gap-1.5">
-              {(["thinwall", "vacuum"] as const).map((pack) => {
-                const selected = packaging === pack;
-                const meta = GRAM_PACKAGING_META[pack];
+              {gramPackings.map((pack) => {
+                const selected = activeGramPack?.id === pack.id;
                 return (
                   <button
-                    key={pack}
+                    key={pack.id}
                     type="button"
-                    onClick={() => setPackaging(pack)}
+                    onClick={() => setSelectedGramPackId(pack.id)}
                     className={cn(
                       "rounded-xl border px-2.5 py-2 text-left transition",
                       selected
@@ -336,16 +436,16 @@ export function DualModeConfigurator({
                         : "border-orchard/12 bg-white/80 text-bark hover:border-orchard/30",
                     )}
                   >
-                    <span className="block truncate text-[11.5px] font-semibold">
-                      {pack === "thinwall" ? "Thinwall Segar" : "Vacuum Pack"}
-                    </span>
+                    <span className="block truncate text-[11.5px] font-semibold">{pack.name}</span>
                     <span
                       className={cn(
                         "block font-mono text-[10px] tabular",
                         selected ? "text-custard" : "text-moss",
                       )}
                     >
-                      {meta.surcharge === 0 ? "Gratis" : `+${formatRupiah(meta.surcharge)} · Luar kota`}
+                      {pack.extra_price === 0
+                        ? "Gratis"
+                        : `+${formatRupiah(pack.extra_price)}${pack.badge ? ` · ${pack.badge}` : ""}`}
                     </span>
                   </button>
                 );
@@ -359,9 +459,11 @@ export function DualModeConfigurator({
       <div className="flex items-center justify-between gap-3 pt-1">
         <div>
           <span className="block text-[10.5px] font-medium text-moss">
-            {activeMode === "butir"
-              ? `1 butir ${size}`
-              : `${formatGram(clampedGrams)} · ${formatRupiah(product.price_per_100g)}/100g`}
+            {extraOptionFee > 0
+              ? `Durian ${formatRupiah(basePrice)} + Opsi ${formatRupiah(extraOptionFee)}`
+              : activeMode === "butir"
+                ? `1 butir ${activeGrade?.name ?? "Sedang"}`
+                : `${formatGram(clampedGrams)} · ${formatRupiah(product.price_per_100g)}/100g`}
           </span>
           <RollingNumber
             value={unitPrice * safeQty}

@@ -12,6 +12,7 @@ import {
   MessageSquareQuote,
   Package,
   Settings,
+  SlidersHorizontal,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -28,6 +29,7 @@ const OPS_NAV = [
 ] as const;
 
 const CMS_NAV = [
+  { href: "/admin/kustomisasi", label: "Kustomisasi", icon: SlidersHorizontal },
   { href: "/admin/tampilan", label: "Tampilan & Foto", icon: ImageIcon },
   { href: "/admin/konten", label: "Konten & Copy", icon: FileText },
   { href: "/admin/pengaturan", label: "Pembayaran & Toko", icon: Settings },

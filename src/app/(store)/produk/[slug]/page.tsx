@@ -6,8 +6,8 @@ import { notFound } from "next/navigation";
 import { TasteMeter } from "@/components/motion/taste-meter";
 import { DualModeConfigurator } from "@/components/store/dual-mode-configurator";
 import { ProductImage } from "@/components/store/product-image";
-import { CATEGORY_LABEL } from "@/lib/constants";
-import { getActiveProducts, getProductBySlug, getStoreSettings } from "@/lib/data/store";
+import { getCategoryLabel } from "@/lib/constants";
+import { getActiveCustomOptions, getActiveProducts, getProductBySlug, getStoreSettings } from "@/lib/data/store";
 import { isSoldOut, startingPrice } from "@/lib/pricing";
 import { formatRupiah, getSiteUrl } from "@/lib/utils";
 import { buildWhatsAppUrl } from "@/lib/whatsapp";
@@ -47,13 +47,15 @@ export default async function ProductDetailPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const [product, settings, allProducts] = await Promise.all([
+  const [product, settings, allProducts, customOptions] = await Promise.all([
     getProductBySlug(slug),
     getStoreSettings(),
     getActiveProducts(),
+    getActiveCustomOptions(),
   ]);
 
   if (!product) notFound();
+  const categories = customOptions.filter((o) => o.option_type === "category");
 
   const related = allProducts.filter((p) => p.id !== product.id).slice(0, 3);
   const siteUrl = getSiteUrl();
@@ -108,7 +110,7 @@ export default async function ProductDetailPage({
               />
               <div className="absolute left-5 top-5 flex flex-wrap gap-2">
                 <span className="rounded-full bg-orchard/85 px-3 py-1 text-xs font-semibold text-cream backdrop-blur">
-                  {CATEGORY_LABEL[product.variety_category]}
+                  {getCategoryLabel(product.variety_category, categories)}
                 </span>
                 {product.badge ? (
                   <span className="rounded-full bg-gold px-3 py-1 text-xs font-bold text-orchard shadow-soft">
@@ -138,7 +140,12 @@ export default async function ProductDetailPage({
             </div>
 
             <div className="rounded-3xl border border-orchard/10 bg-white/85 p-5 shadow-soft sm:p-6">
-              <DualModeConfigurator product={product} variant="full" />
+              <DualModeConfigurator
+                product={product}
+                variant="full"
+                customOptions={customOptions}
+                gramPresets={settings.gram_presets_json}
+              />
             </div>
 
             <div className="rounded-3xl border border-orchard/10 bg-cream-2/60 p-6">

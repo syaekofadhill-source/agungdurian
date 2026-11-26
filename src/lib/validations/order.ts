@@ -17,15 +17,19 @@ export const cartItemSchema = z.discriminatedUnion("mode", [
   z.object({
     mode: z.literal("butir"),
     productId: uuid,
-    size: z.enum(["sedang", "besar", "jumbo"]),
-    preparation: z.enum(["utuh", "kupas"]),
+    size: z.string().trim().min(1).max(60),
+    preparation: z.string().trim().min(1).max(60),
+    gradeId: z.string().trim().max(60).optional().nullable(),
+    preparationId: z.string().trim().max(60).optional().nullable(),
+    packingId: z.string().trim().max(60).optional().nullable(),
     quantity: z.number().int().min(1).max(50),
   }),
   z.object({
     mode: z.literal("gram"),
     productId: uuid,
     grams: z.number().int().min(50).max(10000).multipleOf(50),
-    packaging: z.enum(["thinwall", "vacuum"]),
+    packaging: z.string().trim().min(1).max(60),
+    packingId: z.string().trim().max(60).optional().nullable(),
     quantity: z.number().int().min(1).max(20),
   }),
 ]);
@@ -47,6 +51,9 @@ export const checkoutSchema = z
       error: "Pilih metode pembayaran",
     }),
     deliveryAddress: z.string().trim().max(400, { error: "Alamat terlalu panjang" }).optional().default(""),
+    deliveryZoneId: z.string().trim().max(60).optional().nullable(),
+    addonIds: z.array(z.string().trim().max(60)).max(20).optional().default([]),
+    voucherCode: z.string().trim().max(32).optional().default(""),
     notes: z.string().trim().max(400, { error: "Catatan terlalu panjang" }).optional().default(""),
     items: z.array(cartItemSchema).min(1, { error: "Keranjang masih kosong" }).max(30),
   })

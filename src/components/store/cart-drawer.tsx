@@ -90,8 +90,8 @@ export function CartDrawer({ settings }: { settings: StoreSettings }) {
                           <p className="truncate font-display text-sm font-bold text-orchard">{line.name}</p>
                           <p className="mt-0.5 text-xs text-moss">
                             {line.mode === "butir"
-                              ? `Per Butir · ${getButirSize(line.size).label} · ${BUTIR_PREPARATION_LABEL[line.preparation]}`
-                              : `Per Gram · ${formatGram(line.grams)} · ${GRAM_PACKAGING_META[line.packaging].label}`}
+                              ? `Per Butir · ${line.gradeName ?? getButirSize(line.size).label} · ${line.preparationName ?? BUTIR_PREPARATION_LABEL[line.preparation] ?? line.preparation}${line.packingName ? ` · ${line.packingName}` : ""}`
+                              : `Per Gram · ${formatGram(line.grams)} · ${line.packingName ?? GRAM_PACKAGING_META[line.packaging]?.label ?? line.packaging}`}
                           </p>
                         </div>
                         <button

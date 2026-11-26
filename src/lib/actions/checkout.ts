@@ -5,13 +5,28 @@ import { randomInt } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
-import { getActiveProducts, getStoreSettings } from "@/lib/data/store";
-import { butirUnitPrice, gramUnitPrice } from "@/lib/pricing";
+import {
+  getActiveCustomOptions,
+  getActiveDeliveryZones,
+  getActiveProducts,
+  getStoreSettings,
+} from "@/lib/data/store";
+import { MOCK_VOUCHERS } from "@/lib/mock-data";
+import { butirUnitPrice, computeVoucherDiscount, gramUnitPrice } from "@/lib/pricing";
 import { createSupabasePublicClient } from "@/lib/supabase/server";
+import { formatRupiah } from "@/lib/utils";
 import { checkoutSchema, type CheckoutInput } from "@/lib/validations/order";
 import { buildOrderMessage, buildWhatsAppUrl } from "@/lib/whatsapp";
 import type { ActionResult } from "@/types/actions";
-import type { OrderItem, Product, PublicOrder, StatusHistoryEntry } from "@/types/database";
+import type {
+  DeliveryZone,
+  OrderAddonSnapshot,
+  OrderItem,
+  Product,
+  PromoVoucher,
+  PublicOrder,
+  StatusHistoryEntry,
+} from "@/types/database";
 
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
@@ -27,6 +42,75 @@ function generateOrderCode(now = new Date()): string {
   let suffix = "";
   for (let i = 0; i < 4; i++) suffix += CODE_ALPHABET[randomInt(CODE_ALPHABET.length)];
   return `AGD-${ymd}-${suffix}`;
+}
+
+async function lookupActiveVoucher(code: string): Promise<PromoVoucher | null> {
+  const clean = code.trim().toUpperCase();
+  if (!clean) return null;
+
+  const supabase = createSupabasePublicClient();
+  if (!supabase) {
+    return MOCK_VOUCHERS.find((v) => v.code.toUpperCase() === clean && v.is_active) ?? null;
+  }
+
+  const { data, error } = await supabase
+    .from("promo_vouchers")
+    .select("*")
+    .eq("code", clean)
+    .eq("is_active", true)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  return data;
+}
+
+function validateVoucherEligibility(
+  voucher: PromoVoucher | null,
+  subtotal: number,
+): { ok: true; voucher: PromoVoucher; discount: number } | { ok: false; error: string } {
+  if (!voucher) {
+    return { ok: false, error: "Kode promo tidak ditemukan atau sudah tidak aktif." };
+  }
+  if (voucher.expires_at && new Date(voucher.expires_at).getTime() < Date.now()) {
+    return { ok: false, error: `Kode promo ${voucher.code} sudah kedaluwarsa.` };
+  }
+  if (voucher.usage_limit !== null && voucher.used_count >= voucher.usage_limit) {
+    return { ok: false, error: `Kuota promo ${voucher.code} sudah habis.` };
+  }
+  if (subtotal < voucher.min_subtotal) {
+    return {
+      ok: false,
+      error: `Minimal belanja ${formatRupiah(voucher.min_subtotal)} untuk memakai promo ${voucher.code}.`,
+    };
+  }
+  return {
+    ok: true,
+    voucher,
+    discount: computeVoucherDiscount(voucher, subtotal),
+  };
+}
+
+export async function validateVoucherAction(
+  rawCode: string,
+  subtotal: number,
+): Promise<ActionResult<{ code: string; discountAmount: number; description: string }>> {
+  const clean = rawCode.trim().toUpperCase();
+  if (clean.length < 3) {
+    return { ok: false, error: "Masukkan kode promo minimal 3 karakter." };
+  }
+  const voucher = await lookupActiveVoucher(clean);
+  const check = validateVoucherEligibility(voucher, Math.max(0, Math.round(subtotal)));
+  if (!check.ok) return { ok: false, error: check.error };
+
+  return {
+    ok: true,
+    message: `Promo ${check.voucher.code} diterapkan! Hemat ${formatRupiah(check.discount)}.`,
+    data: {
+      code: check.voucher.code,
+      discountAmount: check.discount,
+      description: check.voucher.description,
+    },
+  };
 }
 
 export async function submitCheckout(
@@ -49,7 +133,12 @@ export async function submitCheckout(
   }
   const data = parsed.data;
 
-  const [settings, products] = await Promise.all([getStoreSettings(), getActiveProducts()]);
+  const [settings, products, customOptions, deliveryZones] = await Promise.all([
+    getStoreSettings(),
+    getActiveProducts(),
+    getActiveCustomOptions(),
+    getActiveDeliveryZones(),
+  ]);
 
   if (data.paymentMethod === "dana" && !settings.payment_dana_enabled) {
     return { ok: false, error: "Pembayaran DANA sedang dinonaktifkan sementara oleh toko." };
@@ -62,6 +151,11 @@ export async function submitCheckout(
   }
 
   const byId = new Map<string, Product>(products.map((p) => [p.id, p]));
+  const optionById = new Map(customOptions.map((o) => [o.id, o]));
+  const grades = customOptions.filter((o) => o.option_type === "butir_grade");
+  const preps = customOptions.filter((o) => o.option_type === "preparation");
+  const packings = customOptions.filter((o) => o.option_type === "packing");
+  const addonsCatalog = customOptions.filter((o) => o.option_type === "checkout_addon");
 
   const items: OrderItem[] = [];
   const butirDemand = new Map<string, number>();
@@ -77,14 +171,38 @@ export async function submitCheckout(
       if (!product.allow_butir) {
         return { ok: false, error: `${product.name} saat ini tidak dijual per butir.` };
       }
-      const unit = butirUnitPrice(product, line.size);
+      const gradeOpt =
+        (line.gradeId ? optionById.get(line.gradeId) : undefined) ??
+        grades.find((g) => g.code === line.size);
+      const prepOpt =
+        (line.preparationId ? optionById.get(line.preparationId) : undefined) ??
+        preps.find((p) => p.code === line.preparation);
+      const packOpt = line.packingId ? optionById.get(line.packingId) : undefined;
+
+      if (packOpt && packOpt.option_type !== "packing") {
+        return { ok: false, error: "Opsi packing tidak valid." };
+      }
+
+      const prepExtra = prepOpt?.extra_price ?? 0;
+      const packExtra = packOpt?.extra_price ?? 0;
+      const unit = butirUnitPrice(product, gradeOpt ?? line.size, prepExtra, packExtra);
+
       butirDemand.set(product.id, (butirDemand.get(product.id) ?? 0) + line.quantity);
       items.push({
         mode: "butir",
         product_id: product.id,
         product_name: product.name,
-        size: line.size,
-        preparation: line.preparation,
+        size: gradeOpt?.code ?? line.size,
+        preparation: prepOpt?.code ?? line.preparation,
+        grade_id: gradeOpt?.id ?? null,
+        grade_name: gradeOpt?.name ?? null,
+        grade_multiplier: gradeOpt?.price_multiplier ?? 1,
+        preparation_id: prepOpt?.id ?? null,
+        preparation_name: prepOpt?.name ?? null,
+        preparation_price: prepExtra,
+        packing_id: packOpt?.id ?? null,
+        packing_name: packOpt?.name ?? null,
+        packing_price: packExtra,
         quantity: line.quantity,
         unit_price: unit,
         line_total: unit * line.quantity,
@@ -99,14 +217,23 @@ export async function submitCheckout(
           error: `Gramasi ${product.name} harus antara ${product.min_gram}g – ${product.max_gram}g.`,
         };
       }
-      const unit = gramUnitPrice(product, line.grams, line.packaging);
+
+      const packOpt =
+        (line.packingId ? optionById.get(line.packingId) : undefined) ??
+        packings.find((p) => p.code === line.packaging);
+      const packExtra = packOpt?.extra_price ?? 0;
+      const unit = gramUnitPrice(product, line.grams, packOpt ? packExtra : line.packaging);
+
       gramDemand.set(product.id, (gramDemand.get(product.id) ?? 0) + line.grams * line.quantity);
       items.push({
         mode: "gram",
         product_id: product.id,
         product_name: product.name,
         grams: line.grams,
-        packaging: line.packaging,
+        packaging: packOpt?.code ?? line.packaging,
+        packing_id: packOpt?.id ?? null,
+        packing_name: packOpt?.name ?? null,
+        packing_price: packExtra,
         quantity: line.quantity,
         unit_price: unit,
         line_total: unit * line.quantity,
@@ -127,7 +254,46 @@ export async function submitCheckout(
     }
   }
 
-  const total = items.reduce((sum, i) => sum + i.line_total, 0);
+  // Server-recomputed Add-ons
+  const addonsMap = new Map(addonsCatalog.map((a) => [a.id, a]));
+  const selectedAddons: OrderAddonSnapshot[] = [];
+  for (const aid of new Set(data.addonIds)) {
+    const found = addonsMap.get(aid);
+    if (found) {
+      selectedAddons.push({ addon_id: found.id, name: found.name, price: found.extra_price });
+    }
+  }
+  const addonsTotal = selectedAddons.reduce((sum, a) => sum + a.price, 0);
+
+  // Server-recomputed Delivery Zone
+  let zone: DeliveryZone | null = null;
+  if (data.deliveryMethod !== "pickup" && data.deliveryZoneId) {
+    zone = deliveryZones.find((z) => z.id === data.deliveryZoneId) ?? null;
+    if (!zone) {
+      return { ok: false, error: "Zona pengiriman yang dipilih sudah tidak aktif. Silakan pilih ulang." };
+    }
+    if (data.paymentMethod === "cod" && !zone.allow_cod) {
+      return { ok: false, error: `COD tidak tersedia untuk zona ${zone.name}. Silakan pilih Transfer DANA.` };
+    }
+  }
+  const shippingFee = zone ? zone.shipping_fee : 0;
+
+  // Server-recomputed Subtotal & Voucher
+  const subtotalAmount = items.reduce((sum, i) => sum + i.line_total, 0);
+  let voucherCode: string | null = null;
+  let discountAmount = 0;
+
+  if (data.voucherCode) {
+    const voucher = await lookupActiveVoucher(data.voucherCode);
+    const check = validateVoucherEligibility(voucher, subtotalAmount);
+    if (!check.ok) {
+      return { ok: false, error: check.error };
+    }
+    voucherCode = check.voucher.code;
+    discountAmount = check.discount;
+  }
+
+  const total = Math.max(0, subtotalAmount + addonsTotal + shippingFee - discountAmount);
   const deliveryAddress = data.deliveryMethod === "pickup" ? null : data.deliveryAddress || null;
   const notes = data.notes || null;
   const nowIso = new Date().toISOString();
@@ -154,6 +320,14 @@ export async function submitCheckout(
         delivery_address: deliveryAddress,
         notes,
         items_json: items,
+        subtotal_amount: subtotalAmount,
+        addons_json: selectedAddons,
+        addons_total: addonsTotal,
+        delivery_zone_id: zone?.id ?? null,
+        delivery_zone_name: zone?.name ?? null,
+        shipping_fee: shippingFee,
+        voucher_code: voucherCode,
+        discount_amount: discountAmount,
         total_amount: total,
         payment_method: data.paymentMethod,
         payment_status: "unpaid",
@@ -171,8 +345,14 @@ export async function submitCheckout(
       }
     }
     if (!saved) return { ok: false, error: "Gagal membuat kode pesanan unik. Silakan coba lagi." };
+
+    if (voucherCode) {
+      await supabase.rpc("increment_voucher_usage", { p_code: voucherCode });
+    }
+
     revalidatePath("/admin");
     revalidatePath("/admin/pesanan");
+    revalidatePath("/admin/kustomisasi");
   }
 
   const message = buildOrderMessage({
@@ -185,6 +365,12 @@ export async function submitCheckout(
     deliveryAddress,
     notes,
     items,
+    subtotalAmount,
+    addons: selectedAddons,
+    deliveryZoneName: zone?.name ?? null,
+    shippingFee,
+    voucherCode,
+    discountAmount,
     total,
   });
 
@@ -201,6 +387,13 @@ export async function submitCheckout(
     status: "pending_approval",
     admin_note: null,
     items_json: items,
+    subtotal_amount: subtotalAmount,
+    addons_json: selectedAddons,
+    addons_total: addonsTotal,
+    delivery_zone_name: zone?.name ?? null,
+    shipping_fee: shippingFee,
+    voucher_code: voucherCode,
+    discount_amount: discountAmount,
     total_amount: total,
     status_history_json: initialHistory,
     approved_at: null,

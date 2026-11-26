@@ -1,6 +1,6 @@
 /**
- * Domain & database types for AgungDurian V2.
- * Mirrors `supabase/schema.sql` + `supabase/migration_v2.sql`.
+ * Domain & database types for AgungDurian V3.
+ * Mirrors `supabase/schema.sql` + `supabase/migration_v3.sql`.
  */
 
 export type HarvestStatus = "panen_raya" | "stok_terbatas" | "pre_order";
@@ -15,13 +15,67 @@ export type OrderStatus =
 export type ApprovalStatus = "pending_approval" | "approved" | "rejected";
 export type PaymentMethod = "dana" | "cod" | "ambil_di_tempat";
 export type PaymentStatus = "unpaid" | "waiting_verification" | "paid" | "rejected";
-export type VarietyCategory = "lokal" | "premium" | "kupas";
+export type VarietyCategory = string;
 export type DeliveryMethod = "pickup" | "local_delivery" | "shipping_vacuum";
 
 export type SellMode = "butir" | "gram";
-export type ButirSize = "sedang" | "besar" | "jumbo";
-export type ButirPreparation = "utuh" | "kupas";
-export type GramPackaging = "thinwall" | "vacuum";
+export type ButirSize = string;
+export type ButirPreparation = string;
+export type GramPackaging = string;
+
+export type CustomOptionType = "packing" | "preparation" | "butir_grade" | "checkout_addon" | "category";
+export type OptionAppliesTo = "butir" | "gram" | "both" | "order";
+export type DiscountType = "percent" | "fixed";
+
+export type CustomOption = {
+  id: string;
+  option_type: CustomOptionType;
+  code: string;
+  name: string;
+  description: string;
+  applies_to: OptionAppliesTo;
+  extra_price: number;
+  price_multiplier: number;
+  weight_label: string | null;
+  badge: string | null;
+  is_default: boolean;
+  is_active: boolean;
+  sort_order: number;
+  created_at: string;
+};
+
+export type DeliveryZone = {
+  id: string;
+  name: string;
+  description: string;
+  shipping_fee: number;
+  estimated_time: string;
+  allow_cod: boolean;
+  is_active: boolean;
+  sort_order: number;
+  created_at: string;
+};
+
+export type PromoVoucher = {
+  id: string;
+  code: string;
+  description: string;
+  discount_type: DiscountType;
+  discount_value: number;
+  max_discount: number | null;
+  min_subtotal: number;
+  usage_limit: number | null;
+  used_count: number;
+  is_active: boolean;
+  expires_at: string | null;
+  created_at: string;
+};
+
+export type OrderAddonSnapshot = {
+  addon_id: string;
+  name: string;
+  price: number;
+};
 
 export type WhyIconName = "shield" | "sprout" | "scale" | "truck";
 
@@ -65,6 +119,7 @@ export type StoreSettings = {
   cta_primary_text: string;
   footer_description: string;
   why_items_json: WhyItem[];
+  gram_presets_json: number[];
   payment_dana_enabled: boolean;
   payment_dana_number: string;
   payment_dana_holder: string;
@@ -113,6 +168,15 @@ export type OrderItem =
       product_name: string;
       size: ButirSize;
       preparation: ButirPreparation;
+      packing_id?: string | null;
+      packing_name?: string | null;
+      packing_price?: number;
+      preparation_id?: string | null;
+      preparation_name?: string | null;
+      preparation_price?: number;
+      grade_id?: string | null;
+      grade_name?: string | null;
+      grade_multiplier?: number;
       quantity: number;
       unit_price: number;
       line_total: number;
@@ -123,6 +187,9 @@ export type OrderItem =
       product_name: string;
       grams: number;
       packaging: GramPackaging;
+      packing_id?: string | null;
+      packing_name?: string | null;
+      packing_price?: number;
       quantity: number;
       unit_price: number;
       line_total: number;
@@ -137,6 +204,14 @@ export type Order = {
   delivery_address: string | null;
   notes: string | null;
   items_json: OrderItem[];
+  subtotal_amount: number;
+  addons_json: OrderAddonSnapshot[];
+  addons_total: number;
+  delivery_zone_id: string | null;
+  delivery_zone_name: string | null;
+  shipping_fee: number;
+  voucher_code: string | null;
+  discount_amount: number;
   total_amount: number;
   payment_method: PaymentMethod;
   payment_status: PaymentStatus;
@@ -164,6 +239,13 @@ export type PublicOrder = {
   status: OrderStatus;
   admin_note: string | null;
   items_json: OrderItem[];
+  subtotal_amount: number;
+  addons_json: OrderAddonSnapshot[];
+  addons_total: number;
+  delivery_zone_name: string | null;
+  shipping_fee: number;
+  voucher_code: string | null;
+  discount_amount: number;
   total_amount: number;
   status_history_json: StatusHistoryEntry[];
   approved_at: string | null;
@@ -212,9 +294,20 @@ type OrderInsert = Optional<
   | "stock_deducted"
   | "delivery_address"
   | "notes"
+  | "subtotal_amount"
+  | "addons_json"
+  | "addons_total"
+  | "delivery_zone_id"
+  | "delivery_zone_name"
+  | "shipping_fee"
+  | "voucher_code"
+  | "discount_amount"
 >;
 
 type TestimonialInsert = Optional<Testimonial, "id" | "created_at" | "is_visible" | "purchased_variant">;
+type CustomOptionInsert = Optional<CustomOption, "id" | "created_at" | "description" | "weight_label" | "badge" | "is_default" | "is_active" | "sort_order">;
+type DeliveryZoneInsert = Optional<DeliveryZone, "id" | "created_at" | "description" | "estimated_time" | "allow_cod" | "is_active" | "sort_order">;
+type PromoVoucherInsert = Optional<PromoVoucher, "id" | "created_at" | "description" | "max_discount" | "min_subtotal" | "usage_limit" | "used_count" | "is_active" | "expires_at">;
 
 export type OrderAdminAction =
   | "approve"
@@ -251,6 +344,24 @@ export type Database = {
         Update: Partial<Testimonial>;
         Relationships: [];
       };
+      custom_options: {
+        Row: CustomOption;
+        Insert: CustomOptionInsert;
+        Update: Partial<CustomOption>;
+        Relationships: [];
+      };
+      delivery_zones: {
+        Row: DeliveryZone;
+        Insert: DeliveryZoneInsert;
+        Update: Partial<DeliveryZone>;
+        Relationships: [];
+      };
+      promo_vouchers: {
+        Row: PromoVoucher;
+        Insert: PromoVoucherInsert;
+        Update: Partial<PromoVoucher>;
+        Relationships: [];
+      };
     };
     Views: { [_ in never]: never };
     Functions: {
@@ -284,10 +395,13 @@ export type Database = {
         };
         Returns: Order;
       };
+      increment_voucher_usage: {
+        Args: { p_code: string };
+        Returns: undefined;
+      };
     };
     Enums: {
       harvest_status: HarvestStatus;
-      variety_category: VarietyCategory;
       delivery_method: DeliveryMethod;
     };
     CompositeTypes: { [_ in never]: never };

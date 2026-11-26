@@ -6,17 +6,22 @@ import Link from "next/link";
 import { MagneticCard } from "@/components/motion/magnetic-card";
 import { DualModeConfigurator } from "@/components/store/dual-mode-configurator";
 import { ProductImage } from "@/components/store/product-image";
-import { CATEGORY_LABEL, LOW_STOCK_BUTIR, LOW_STOCK_GRAM } from "@/lib/constants";
+import { getCategoryLabel, LOW_STOCK_BUTIR, LOW_STOCK_GRAM } from "@/lib/constants";
 import { isSoldOut } from "@/lib/pricing";
-import type { Product } from "@/types/database";
+import type { CustomOption, Product } from "@/types/database";
 
 export function ProductCard({
   product,
+  customOptions,
+  gramPresets,
   onOpenDetail,
 }: {
   product: Product;
+  customOptions?: CustomOption[];
+  gramPresets?: number[];
   onOpenDetail: (product: Product) => void;
 }) {
+  const categories = customOptions?.filter((o) => o.option_type === "category");
   const soldOut = isSoldOut(product);
   const lowButir = product.allow_butir && product.stock_butir > 0 && product.stock_butir <= LOW_STOCK_BUTIR;
   const lowGram =
@@ -40,7 +45,7 @@ export function ProductCard({
 
           <div className="absolute left-3.5 top-3.5 flex flex-wrap gap-1.5">
             <span className="rounded-full bg-orchard/80 px-2.5 py-1 text-[10.5px] font-semibold text-cream backdrop-blur-sm">
-              {CATEGORY_LABEL[product.variety_category]}
+              {getCategoryLabel(product.variety_category, categories)}
             </span>
             {product.badge ? (
               <span className="rounded-full bg-gold px-2.5 py-1 text-[10.5px] font-bold text-orchard shadow-sm">
@@ -93,7 +98,12 @@ export function ProductCard({
           </div>
 
           <div className="mt-auto pt-4">
-            <DualModeConfigurator product={product} variant="compact" />
+            <DualModeConfigurator
+              product={product}
+              variant="compact"
+              customOptions={customOptions}
+              gramPresets={gramPresets}
+            />
           </div>
         </div>
       </article>

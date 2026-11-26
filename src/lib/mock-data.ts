@@ -1,5 +1,14 @@
 import { DEFAULT_WHY_ITEMS } from "@/lib/constants";
-import type { Order, Product, PublicOrder, StoreSettings, Testimonial } from "@/types/database";
+import type {
+  CustomOption,
+  DeliveryZone,
+  Order,
+  Product,
+  PromoVoucher,
+  PublicOrder,
+  StoreSettings,
+  Testimonial,
+} from "@/types/database";
 
 /**
  * Typed mirror of `supabase/seed.sql`.
@@ -50,6 +59,7 @@ export const MOCK_SETTINGS: StoreSettings = {
   footer_description:
     "Kebun durian keluarga di lereng Sigaluh. Hanya menjual buah jatuhan matang pohon dengan garansi ganti baru bila hambar atau mentah.",
   why_items_json: DEFAULT_WHY_ITEMS,
+  gram_presets_json: [250, 500, 750, 1000],
   payment_dana_enabled: true,
   payment_dana_number: "081391094308",
   payment_dana_holder: "Durian Pak Agung",
@@ -305,6 +315,14 @@ export const MOCK_ORDERS: Order[] = [
       },
     ],
     total_amount: 175000,
+    subtotal_amount: 175000,
+    addons_json: [],
+    addons_total: 0,
+    delivery_zone_id: null,
+    delivery_zone_name: null,
+    shipping_fee: 0,
+    voucher_code: null,
+    discount_amount: 0,
     payment_method: "dana",
     payment_status: "waiting_verification",
     payment_proof_url: "/images/products/bawor.webp",
@@ -351,6 +369,14 @@ export const MOCK_ORDERS: Order[] = [
       },
     ],
     total_amount: 230000,
+    subtotal_amount: 230000,
+    addons_json: [],
+    addons_total: 0,
+    delivery_zone_id: null,
+    delivery_zone_name: null,
+    shipping_fee: 0,
+    voucher_code: null,
+    discount_amount: 0,
     payment_method: "cod",
     payment_status: "unpaid",
     payment_proof_url: null,
@@ -403,6 +429,14 @@ export const MOCK_ORDERS: Order[] = [
       },
     ],
     total_amount: 325000,
+    subtotal_amount: 325000,
+    addons_json: [],
+    addons_total: 0,
+    delivery_zone_id: null,
+    delivery_zone_name: null,
+    shipping_fee: 0,
+    voucher_code: null,
+    discount_amount: 0,
     payment_method: "ambil_di_tempat",
     payment_status: "paid",
     payment_proof_url: null,
@@ -445,9 +479,47 @@ export function toPublicOrder(order: Order): PublicOrder {
     status: order.status,
     admin_note: order.admin_note,
     items_json: order.items_json,
+    subtotal_amount: order.subtotal_amount || order.total_amount,
+    addons_json: order.addons_json ?? [],
+    addons_total: order.addons_total ?? 0,
+    delivery_zone_name: order.delivery_zone_name ?? null,
+    shipping_fee: order.shipping_fee ?? 0,
+    voucher_code: order.voucher_code ?? null,
+    discount_amount: order.discount_amount ?? 0,
     total_amount: order.total_amount,
     status_history_json: order.status_history_json,
     approved_at: order.approved_at,
     created_at: order.created_at,
   };
 }
+
+export const MOCK_CUSTOM_OPTIONS: CustomOption[] = [
+  { id: "opt-pack-1", option_type: "packing", code: "thinwall", name: "Thinwall Box Segar", description: "Kemasan food-grade untuk santap hari ini", applies_to: "gram", extra_price: 0, price_multiplier: 1, weight_label: null, badge: "Gratis", is_default: true, is_active: true, sort_order: 1, created_at: ts },
+  { id: "opt-pack-2", option_type: "packing", code: "vacuum", name: "Vacuum Pack Tahan Kirim", description: "Kedap udara, menjaga aroma & kesegaran", applies_to: "gram", extra_price: 5000, price_multiplier: 1, weight_label: null, badge: "Populer", is_default: false, is_active: true, sort_order: 2, created_at: ts },
+  { id: "opt-pack-3", option_type: "packing", code: "styrofoam-ice", name: "Box Styrofoam + Ice Gel", description: "Tahan dingin hingga 24 jam untuk kirim luar kota", applies_to: "both", extra_price: 25000, price_multiplier: 1, weight_label: null, badge: "Luar Kota", is_default: false, is_active: true, sort_order: 3, created_at: ts },
+  { id: "opt-pack-4", option_type: "packing", code: "hampers-bambu", name: "Keranjang Hampers Bambu + Pita", description: "Kemasan eksklusif siap hadiah & oleh-oleh", applies_to: "both", extra_price: 35000, price_multiplier: 1, weight_label: null, badge: "Hadiah", is_default: false, is_active: true, sort_order: 4, created_at: ts },
+  { id: "opt-prep-1", option_type: "preparation", code: "utuh", name: "Kirim Utuh (Belum Dibuka)", description: "Buah utuh berduri, bisa dibuka sendiri saat santap", applies_to: "butir", extra_price: 0, price_multiplier: 1, weight_label: null, badge: "Gratis", is_default: true, is_active: true, sort_order: 1, created_at: ts },
+  { id: "opt-prep-2", option_type: "preparation", code: "kupas", name: "Kupas Rapi di Tempat", description: "Dibukakan dan ditata rapi di wadah food-grade", applies_to: "butir", extra_price: 0, price_multiplier: 1, weight_label: null, badge: "Praktis", is_default: false, is_active: true, sort_order: 2, created_at: ts },
+  { id: "opt-prep-3", option_type: "preparation", code: "kupas-pisah-biji", name: "Kupas & Pisah Biji (Daging Saja)", description: "Daging durian murni bebas cangkang & biji", applies_to: "butir", extra_price: 10000, price_multiplier: 1, weight_label: null, badge: "Siap Olah", is_default: false, is_active: true, sort_order: 3, created_at: ts },
+  { id: "opt-grade-1", option_type: "butir_grade", code: "sedang", name: "Sedang", description: "Ukuran pas untuk 1-2 orang", applies_to: "butir", extra_price: 0, price_multiplier: 1.0, weight_label: "±1,8 kg", badge: null, is_default: true, is_active: true, sort_order: 1, created_at: ts },
+  { id: "opt-grade-2", option_type: "butir_grade", code: "besar", name: "Besar", description: "Juring lebih penuh untuk keluarga kecil", applies_to: "butir", extra_price: 0, price_multiplier: 1.3, weight_label: "±2,5 kg", badge: "Favorit", is_default: false, is_active: true, sort_order: 2, created_at: ts },
+  { id: "opt-grade-3", option_type: "butir_grade", code: "jumbo", name: "Jumbo", description: "Buah pilihan terbesar dari panen pagi", applies_to: "butir", extra_price: 0, price_multiplier: 1.65, weight_label: "±3,2 kg", badge: "Puas", is_default: false, is_active: true, sort_order: 3, created_at: ts },
+  { id: "opt-cat-1", option_type: "category", code: "lokal", name: "Lokal Sigaluh", description: "Durian lokal pilihan dari pohon tua Sigaluh", applies_to: "both", extra_price: 0, price_multiplier: 1, weight_label: null, badge: null, is_default: true, is_active: true, sort_order: 1, created_at: ts },
+  { id: "opt-cat-2", option_type: "category", code: "premium", name: "Premium / Unggulan", description: "Bawor, Montong, Musang King & Ochee", applies_to: "both", extra_price: 0, price_multiplier: 1, weight_label: null, badge: null, is_default: false, is_active: true, sort_order: 2, created_at: ts },
+  { id: "opt-cat-3", option_type: "category", code: "kupas", name: "Paket Kupas / Box", description: "Daging kupas segar siap santap", applies_to: "gram", extra_price: 0, price_multiplier: 1, weight_label: null, badge: null, is_default: false, is_active: true, sort_order: 3, created_at: ts },
+  { id: "opt-addon-1", option_type: "checkout_addon", code: "kartu-ucapan", name: "Kartu Ucapan Custom", description: "Tulis pesan ucapan di catatan pesanan", applies_to: "order", extra_price: 5000, price_multiplier: 1, weight_label: null, badge: null, is_default: false, is_active: true, sort_order: 1, created_at: ts },
+  { id: "opt-addon-2", option_type: "checkout_addon", code: "extra-ice-gel", name: "Extra Ice Gel Pack", description: "Tambahan pendingin untuk pengiriman jarak jauh", applies_to: "order", extra_price: 7000, price_multiplier: 1, weight_label: null, badge: "Dingin Ekstra", is_default: false, is_active: true, sort_order: 2, created_at: ts },
+  { id: "opt-addon-3", option_type: "checkout_addon", code: "alat-makan", name: "Sarung Tangan & Sendok Makan Set", description: "Perlengkapan santap praktis & higienis", applies_to: "order", extra_price: 0, price_multiplier: 1, weight_label: null, badge: "Gratis", is_default: false, is_active: true, sort_order: 3, created_at: ts },
+];
+
+export const MOCK_DELIVERY_ZONES: DeliveryZone[] = [
+  { id: "zone-1", name: "Kecamatan Sigaluh (Area Kebun)", description: "Pengantaran cepat sekitar Karangmangu & Sigaluh", shipping_fee: 0, estimated_time: "30–60 menit", allow_cod: true, is_active: true, sort_order: 1, created_at: ts },
+  { id: "zone-2", name: "Banjarnegara Kota & Sekitarnya", description: "Kurir langsung dari kebun ke alamat rumah", shipping_fee: 10000, estimated_time: "1–2 jam", allow_cod: true, is_active: true, sort_order: 2, created_at: ts },
+  { id: "zone-3", name: "Purbalingga / Wonosobo / Purwokerto", description: "Kurir antar kota / travel sore hari", shipping_fee: 25000, estimated_time: "Hari yang sama", allow_cod: false, is_active: true, sort_order: 3, created_at: ts },
+  { id: "zone-4", name: "Kirim Luar Kota (Express Cold Pack)", description: "Pengiriman kilat seluruh Jawa dengan es gel", shipping_fee: 45000, estimated_time: "1 hari sampai", allow_cod: false, is_active: true, sort_order: 4, created_at: ts },
+];
+
+export const MOCK_VOUCHERS: PromoVoucher[] = [
+  { id: "vouch-1", code: "SIGALUH10", description: "Diskon 10% (maks. Rp30.000) untuk belanja minimal Rp100.000", discount_type: "percent", discount_value: 10, max_discount: 30000, min_subtotal: 100000, usage_limit: null, used_count: 0, is_active: true, expires_at: null, created_at: ts },
+  { id: "vouch-2", code: "PANENRAYA", description: "Potongan langsung Rp15.000 untuk belanja minimal Rp150.000", discount_type: "fixed", discount_value: 15000, max_discount: null, min_subtotal: 150000, usage_limit: null, used_count: 0, is_active: true, expires_at: null, created_at: ts },
+];

@@ -7,16 +7,21 @@ import { TasteMeter } from "@/components/motion/taste-meter";
 import { DualModeConfigurator } from "@/components/store/dual-mode-configurator";
 import { ProductImage } from "@/components/store/product-image";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
-import { CATEGORY_LABEL } from "@/lib/constants";
-import type { Product } from "@/types/database";
+import { getCategoryLabel } from "@/lib/constants";
+import type { CustomOption, Product } from "@/types/database";
 
 export function ProductDetailModal({
   product,
+  customOptions,
+  gramPresets,
   onOpenChange,
 }: {
   product: Product | null;
+  customOptions?: CustomOption[];
+  gramPresets?: number[];
   onOpenChange: (open: boolean) => void;
 }) {
+  const categories = customOptions?.filter((o) => o.option_type === "category");
   return (
     <Dialog open={product !== null} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl overflow-hidden p-0">
@@ -34,7 +39,7 @@ export function ProductDetailModal({
               <div className="absolute inset-x-4 bottom-4 space-y-2 text-cream">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="rounded-full bg-cream/15 px-2.5 py-0.5 text-[11px] font-semibold backdrop-blur">
-                    {CATEGORY_LABEL[product.variety_category]}
+                    {getCategoryLabel(product.variety_category, categories)}
                   </span>
                   {product.badge ? (
                     <span className="rounded-full bg-gold px-2.5 py-0.5 text-[11px] font-bold text-orchard">
@@ -80,6 +85,8 @@ export function ProductDetailModal({
                 key={product.id}
                 product={product}
                 variant="full"
+                customOptions={customOptions}
+                gramPresets={gramPresets}
                 onAdded={() => onOpenChange(false)}
               />
 

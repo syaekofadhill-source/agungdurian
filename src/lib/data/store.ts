@@ -2,19 +2,32 @@ import "server-only";
 
 import { cache } from "react";
 
-import { MOCK_ORDERS, MOCK_PRODUCTS, MOCK_SETTINGS, MOCK_TESTIMONIALS, toPublicOrder } from "@/lib/mock-data";
+import {
+  MOCK_CUSTOM_OPTIONS,
+  MOCK_DELIVERY_ZONES,
+  MOCK_ORDERS,
+  MOCK_PRODUCTS,
+  MOCK_SETTINGS,
+  MOCK_TESTIMONIALS,
+  toPublicOrder,
+} from "@/lib/mock-data";
 import { hydrateStoreSettings } from "@/lib/settings-helper";
 import { createSupabasePublicClient } from "@/lib/supabase/server";
-import type { Product, PublicOrder, StoreSettings, Testimonial } from "@/types/database";
-
-/**
- * Public storefront reads. Each function degrades to typed seed data when
- * Supabase is not configured (demo mode) or temporarily unreachable, so the
- * homepage never white-screens.
- */
+import type {
+  CustomOption,
+  DeliveryZone,
+  Product,
+  PublicOrder,
+  StoreSettings,
+  Testimonial,
+} from "@/types/database";
 
 function normalizeProduct(p: Product): Product {
   return { ...p, avg_weight_kg: Number(p.avg_weight_kg) };
+}
+
+function normalizeOption(o: CustomOption): CustomOption {
+  return { ...o, price_multiplier: Number(o.price_multiplier) };
 }
 
 function summarizeSupabaseError(message: string): string {
@@ -70,6 +83,38 @@ export const getVisibleTestimonials = cache(async (): Promise<Testimonial[]> => 
     return MOCK_TESTIMONIALS;
   }
   return data ?? [];
+});
+
+export const getActiveCustomOptions = cache(async (): Promise<CustomOption[]> => {
+  const supabase = createSupabasePublicClient();
+  if (!supabase) return MOCK_CUSTOM_OPTIONS;
+  const { data, error } = await supabase
+    .from("custom_options")
+    .select("*")
+    .eq("is_active", true)
+    .order("sort_order", { ascending: true })
+    .order("created_at", { ascending: true });
+  if (error) {
+    console.warn("[store] gagal memuat custom_options:", summarizeSupabaseError(error.message));
+    return MOCK_CUSTOM_OPTIONS;
+  }
+  return data && data.length > 0 ? data.map(normalizeOption) : MOCK_CUSTOM_OPTIONS;
+});
+
+export const getActiveDeliveryZones = cache(async (): Promise<DeliveryZone[]> => {
+  const supabase = createSupabasePublicClient();
+  if (!supabase) return MOCK_DELIVERY_ZONES;
+  const { data, error } = await supabase
+    .from("delivery_zones")
+    .select("*")
+    .eq("is_active", true)
+    .order("sort_order", { ascending: true })
+    .order("created_at", { ascending: true });
+  if (error) {
+    console.warn("[store] gagal memuat delivery_zones:", summarizeSupabaseError(error.message));
+    return MOCK_DELIVERY_ZONES;
+  }
+  return data && data.length > 0 ? data : MOCK_DELIVERY_ZONES;
 });
 
 export async function getPublicOrderByCode(orderCode: string): Promise<PublicOrder | null> {

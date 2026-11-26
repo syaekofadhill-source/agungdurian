@@ -13,16 +13,18 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { saveProduct } from "@/lib/actions/products";
 import { slugify } from "@/lib/utils";
-import type { Product, VarietyCategory } from "@/types/database";
+import type { CustomOption, Product, VarietyCategory } from "@/types/database";
 
 type ProductTab = "info" | "pricing" | "photo" | "taste";
 
 function ProductFormBody({
   product,
+  categories,
   configured,
   onSuccess,
 }: {
   product: Product | null;
+  categories: CustomOption[];
   configured: boolean;
   onSuccess: () => void;
 }) {
@@ -183,9 +185,19 @@ function ProductFormBody({
 
               <Field label="Kategori" htmlFor="p-cat" error={fieldErrors.variety_category}>
                 <Select id="p-cat" value={category} onChange={(e) => setCategory(e.target.value as VarietyCategory)}>
-                  <option value="lokal">Lokal Sigaluh</option>
-                  <option value="premium">Premium / Unggulan</option>
-                  <option value="kupas">Paket Kupas / Box</option>
+                  {categories.length > 0 ? (
+                    categories.map((c) => (
+                      <option key={c.code} value={c.code}>
+                        {c.name}
+                      </option>
+                    ))
+                  ) : (
+                    <>
+                      <option value="lokal">Lokal Sigaluh</option>
+                      <option value="premium">Premium / Unggulan</option>
+                      <option value="kupas">Paket Kupas / Box</option>
+                    </>
+                  )}
                 </Select>
               </Field>
 
@@ -394,11 +406,13 @@ export function ProductFormSheet({
   open,
   onOpenChange,
   product,
+  categories,
   configured,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   product: Product | null;
+  categories: CustomOption[];
   configured: boolean;
 }) {
   return (
@@ -421,6 +435,7 @@ export function ProductFormSheet({
         <ProductFormBody
           key={product?.id ?? "new"}
           product={product}
+          categories={categories}
           configured={configured}
           onSuccess={() => onOpenChange(false)}
         />

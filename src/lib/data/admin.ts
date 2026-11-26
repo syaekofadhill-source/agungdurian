@@ -3,11 +3,27 @@ import "server-only";
 import { redirect } from "next/navigation";
 
 import { LOW_STOCK_BUTIR, LOW_STOCK_GRAM } from "@/lib/constants";
-import { MOCK_ORDERS, MOCK_PRODUCTS, MOCK_SETTINGS, MOCK_TESTIMONIALS } from "@/lib/mock-data";
+import {
+  MOCK_CUSTOM_OPTIONS,
+  MOCK_DELIVERY_ZONES,
+  MOCK_ORDERS,
+  MOCK_PRODUCTS,
+  MOCK_SETTINGS,
+  MOCK_TESTIMONIALS,
+  MOCK_VOUCHERS,
+} from "@/lib/mock-data";
 import { hydrateStoreSettings, normalizeOrderRecord } from "@/lib/settings-helper";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import type { Order, Product, StoreSettings, Testimonial } from "@/types/database";
+import type {
+  CustomOption,
+  DeliveryZone,
+  Order,
+  Product,
+  PromoVoucher,
+  StoreSettings,
+  Testimonial,
+} from "@/types/database";
 
 export type AdminSession = {
   configured: boolean;
@@ -34,6 +50,10 @@ export async function getAdminSession(): Promise<AdminSession> {
 
 function normalizeProduct(p: Product): Product {
   return { ...p, avg_weight_kg: Number(p.avg_weight_kg) };
+}
+
+function normalizeOption(o: CustomOption): CustomOption {
+  return { ...o, price_multiplier: Number(o.price_multiplier) };
 }
 
 export async function getAdminProducts(): Promise<Product[]> {
@@ -105,6 +125,63 @@ export async function getAdminTestimonials(): Promise<Testimonial[]> {
   if (error) {
     console.error("[admin] gagal memuat testimoni:", error.message);
     return [];
+  }
+  return data ?? [];
+}
+
+export async function getAdminCustomOptions(): Promise<CustomOption[]> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return MOCK_CUSTOM_OPTIONS;
+
+  const { data, error } = await supabase
+    .from("custom_options")
+    .select("*")
+    .order("option_type", { ascending: true })
+    .order("sort_order", { ascending: true })
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    console.warn("[admin] gagal memuat custom_options:", error.message);
+    return MOCK_CUSTOM_OPTIONS;
+  }
+  return (data ?? []).map(normalizeOption);
+}
+
+export async function getAdminCategories(): Promise<CustomOption[]> {
+  const all = await getAdminCustomOptions();
+  const cats = all.filter((o) => o.option_type === "category" && o.is_active);
+  return cats.length > 0 ? cats : MOCK_CUSTOM_OPTIONS.filter((o) => o.option_type === "category");
+}
+
+export async function getAdminDeliveryZones(): Promise<DeliveryZone[]> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return MOCK_DELIVERY_ZONES;
+
+  const { data, error } = await supabase
+    .from("delivery_zones")
+    .select("*")
+    .order("sort_order", { ascending: true })
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    console.warn("[admin] gagal memuat delivery_zones:", error.message);
+    return MOCK_DELIVERY_ZONES;
+  }
+  return data ?? [];
+}
+
+export async function getAdminVouchers(): Promise<PromoVoucher[]> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return MOCK_VOUCHERS;
+
+  const { data, error } = await supabase
+    .from("promo_vouchers")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.warn("[admin] gagal memuat promo_vouchers:", error.message);
+    return MOCK_VOUCHERS;
   }
   return data ?? [];
 }

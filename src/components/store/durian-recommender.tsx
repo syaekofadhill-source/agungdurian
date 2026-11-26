@@ -9,7 +9,7 @@ import { ProductDetailModal } from "@/components/store/product-detail-modal";
 import { ProductImage } from "@/components/store/product-image";
 import { isSoldOut, startingPrice } from "@/lib/pricing";
 import { cn, formatRupiah } from "@/lib/utils";
-import type { Product } from "@/types/database";
+import type { CustomOption, Product } from "@/types/database";
 
 type TastePref = "manis_legit" | "pahit_kompleks" | "manis_tebal" | "seimbang";
 type FormatPref = "semua" | "butir" | "gram";
@@ -42,7 +42,15 @@ function scoreProduct(p: Product, pref: TastePref): number {
   }
 }
 
-export function DurianRecommender({ products }: { products: Product[] }) {
+export function DurianRecommender({
+  products,
+  customOptions,
+  gramPresets,
+}: {
+  products: Product[];
+  customOptions?: CustomOption[];
+  gramPresets?: number[];
+}) {
   const [tastePref, setTastePref] = useState<TastePref>("manis_legit");
   const [formatPref, setFormatPref] = useState<FormatPref>("semua");
   const [modalProduct, setModalProduct] = useState<Product | null>(null);
@@ -221,6 +229,8 @@ export function DurianRecommender({ products }: { products: Product[] }) {
 
       <ProductDetailModal
         product={modalProduct}
+        customOptions={customOptions}
+        gramPresets={gramPresets}
         onOpenChange={(open) => {
           if (!open) setModalProduct(null);
         }}

@@ -10,15 +10,17 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import { adjustStock, deleteProduct, toggleProductFlag } from "@/lib/actions/products";
-import { CATEGORY_FILTERS, CATEGORY_LABEL, LOW_STOCK_BUTIR, LOW_STOCK_GRAM } from "@/lib/constants";
+import { getCategoryLabel, LOW_STOCK_BUTIR, LOW_STOCK_GRAM } from "@/lib/constants";
 import { cn, formatNumber, formatRupiah } from "@/lib/utils";
-import type { Product, VarietyCategory } from "@/types/database";
+import type { CustomOption, Product, VarietyCategory } from "@/types/database";
 
 export function ProductsManager({
   products,
+  categories,
   configured,
 }: {
   products: Product[];
+  categories: CustomOption[];
   configured: boolean;
 }) {
   const [query, setQuery] = useState("");
@@ -100,7 +102,10 @@ export function ProductsManager({
 
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-3xl border border-orchard/10 bg-white/80 p-4 shadow-soft">
         <div className="flex flex-wrap gap-1.5">
-          {CATEGORY_FILTERS.map((f) => (
+          {[
+            { value: "semua", label: "Semua" },
+            ...categories.map((c) => ({ value: c.code, label: c.name })),
+          ].map((f) => (
             <button
               key={f.value}
               type="button"
@@ -153,7 +158,7 @@ export function ProductsManager({
                         <div className="min-w-0">
                           <p className="truncate font-display text-base font-bold text-orchard">{p.name}</p>
                           <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-moss">
-                            <span>{CATEGORY_LABEL[p.variety_category]}</span>
+                            <span>{getCategoryLabel(p.variety_category, categories)}</span>
                             {p.badge ? (
                               <span className="rounded-full bg-custard px-2 py-0.5 font-semibold text-orchard">
                                 {p.badge}
@@ -301,7 +306,13 @@ export function ProductsManager({
         ) : null}
       </div>
 
-      <ProductFormSheet open={sheetOpen} onOpenChange={setSheetOpen} product={editing} configured={configured} />
+      <ProductFormSheet
+        open={sheetOpen}
+        onOpenChange={setSheetOpen}
+        product={editing}
+        categories={categories}
+        configured={configured}
+      />
 
       <Dialog open={confirmDelete !== null} onOpenChange={(o) => { if (!o) setConfirmDelete(null); }}>
         <DialogContent className="max-w-md p-6">

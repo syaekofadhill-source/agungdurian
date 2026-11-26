@@ -8,13 +8,31 @@ import { Reveal } from "@/components/motion/reveal";
 import { ProductCard } from "@/components/store/product-card";
 import { ProductDetailModal } from "@/components/store/product-detail-modal";
 import { CATEGORY_FILTERS } from "@/lib/constants";
+import { MOCK_CUSTOM_OPTIONS, MOCK_SETTINGS } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
-import type { Product, VarietyCategory } from "@/types/database";
+import type { CustomOption, Product } from "@/types/database";
 
-export function CatalogSection({ products }: { products: Product[] }) {
-  const [category, setCategory] = useState<VarietyCategory | "semua">("semua");
+export function CatalogSection({
+  products,
+  customOptions = MOCK_CUSTOM_OPTIONS,
+  gramPresets = MOCK_SETTINGS.gram_presets_json,
+}: {
+  products: Product[];
+  customOptions?: CustomOption[];
+  gramPresets?: number[];
+}) {
+  const [category, setCategory] = useState<string>("semua");
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<Product | null>(null);
+
+  const categoryTabs = useMemo(() => {
+    const dbCats = customOptions.filter((o) => o.option_type === "category" && o.is_active);
+    if (dbCats.length === 0) return CATEGORY_FILTERS;
+    return [
+      { value: "semua", label: "Semua" },
+      ...dbCats.map((c) => ({ value: c.code, label: c.name })),
+    ];
+  }, [customOptions]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -71,7 +89,7 @@ export function CatalogSection({ products }: { products: Product[] }) {
 
         <div className="mt-8 flex flex-wrap items-center justify-between gap-4 border-b border-orchard/10 pb-5">
           <div className="flex flex-wrap items-center gap-2" role="tablist" aria-label="Filter kategori durian">
-            {CATEGORY_FILTERS.map((tab) => {
+            {categoryTabs.map((tab) => {
               const active = category === tab.value;
               return (
                 <button
@@ -105,7 +123,13 @@ export function CatalogSection({ products }: { products: Product[] }) {
         {filtered.length > 0 ? (
           <div className="mt-8 grid grid-cols-1 gap-7 md:grid-cols-2 lg:grid-cols-3">
             {filtered.map((product) => (
-              <ProductCard key={product.id} product={product} onOpenDetail={setSelected} />
+              <ProductCard
+                key={product.id}
+                product={product}
+                customOptions={customOptions}
+                gramPresets={gramPresets}
+                onOpenDetail={setSelected}
+              />
             ))}
           </div>
         ) : (
@@ -128,7 +152,14 @@ export function CatalogSection({ products }: { products: Product[] }) {
         )}
       </div>
 
-      <ProductDetailModal product={selected} onOpenChange={(open) => { if (!open) setSelected(null); }} />
+      <ProductDetailModal
+        product={selected}
+        customOptions={customOptions}
+        gramPresets={gramPresets}
+        onOpenChange={(open) => {
+          if (!open) setSelected(null);
+        }}
+      />
     </section>
   );
 }
